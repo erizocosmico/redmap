@@ -17,7 +17,10 @@ Distributed golang map-reduce jobs using Go plugins.
 - [ ] Send jobs via CLI
 - [ ] Handle node/job failures
 - [ ] Compile plugins before sending them as jobs
+- [ ] Auth for attaching nodes
+- [ ] Reuse connections on worker clients
 - [ ] Reporting via CLI/web monitor
+- [ ] Implement retry policies
 
 ## License
 
