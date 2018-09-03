@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
 
 	"github.com/erizocosmico/redmap/internal/proto"
 	"github.com/sirupsen/logrus"
@@ -17,9 +18,11 @@ const (
 
 // Server is a worker server that handles connections from a master.
 type Server struct {
-	addr    string
-	maxSize int32
-	jobs    *jobRegistry
+	addr       string
+	version    string
+	maxSize    int32
+	activeJobs int32
+	jobs       *jobRegistry
 }
 
 // ServerOptions provides configuration options for the worker server.
@@ -27,6 +30,8 @@ type ServerOptions struct {
 	// MaxSize is the maximum allowed size for job data. By default, the max
 	// size is 200MB.
 	MaxSize int32
+	// Version of the server.
+	Version string
 }
 
 // NewServer creates a new worker server. MaxSize controls the maximum size
@@ -36,14 +41,20 @@ func NewServer(
 	opts *ServerOptions,
 ) *Server {
 	maxSize := defaultMaxSize
+	version := "unknown"
 	if opts != nil {
 		if opts.MaxSize > 0 {
 			maxSize = opts.MaxSize
+		}
+
+		if opts.Version != "" {
+			version = opts.Version
 		}
 	}
 	return &Server{
 		addr:    addr,
 		maxSize: maxSize,
+		version: version,
 		jobs:    newJobRegistry(),
 	}
 }
@@ -73,6 +84,14 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+func (s *Server) incr() {
+	atomic.AddInt32(&s.activeJobs, 1)
+}
+
+func (s *Server) decr() {
+	atomic.AddInt32(&s.activeJobs, -1)
+}
+
 func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 
@@ -89,6 +108,16 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	}
 
 	s.writeResponse(conn, &proto.Response{Type: proto.Ok, Data: resp})
+}
+
+func (s *Server) info() Info {
+	return Info{
+		Version:       s.version,
+		Addr:          s.addr,
+		Proto:         proto.Version,
+		ActiveJobs:    uint32(atomic.LoadInt32(&s.activeJobs)),
+		InstalledJobs: uint32(s.jobs.count()),
+	}
 }
 
 func (s *Server) handleRequest(
@@ -110,6 +139,9 @@ func (s *Server) handleRequest(
 
 		return nil, nil
 	case proto.ExecMap:
+		s.incr()
+		defer s.decr()
+
 		j, ok := s.jobs.get(r.ID)
 		if !ok {
 			return nil, fmt.Errorf("unable to find job %s", r.ID)
@@ -118,6 +150,8 @@ func (s *Server) handleRequest(
 		return j.Map(r.Data)
 	case proto.HealthCheck:
 		return nil, nil
+	case proto.Info:
+		return s.info().Encode()
 	default:
 		return nil, ErrInvalidJob
 	}

@@ -1,10 +1,11 @@
 package proto
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/erizocosmico/redmap/internal/bin"
 )
 
 // Response for a request.
@@ -45,7 +46,7 @@ func ParseResponse(r io.Reader, maxSize int32) (*Response, error) {
 			return nil, err
 		}
 
-		if size > uint64(maxSize) {
+		if size > uint32(maxSize) {
 			return nil, ErrTooLarge
 		}
 
@@ -61,12 +62,12 @@ func ParseResponse(r io.Reader, maxSize int32) (*Response, error) {
 }
 
 func readResponseType(r io.Reader) (ResponseType, error) {
-	var b = make([]byte, 2)
-	if _, err := io.ReadFull(r, b); err != nil {
+	n, err := bin.ReadUint16(r)
+	if err != nil {
 		return InvalidResponse, fmt.Errorf("proto: can't read response type: %s", err)
 	}
 
-	t := ResponseType(binary.LittleEndian.Uint16(b))
+	t := ResponseType(n)
 	if t == InvalidResponse || t >= lastResponse {
 		return InvalidResponse, fmt.Errorf("proto: invalid response type %d", t)
 	}
@@ -80,17 +81,13 @@ func WriteResponse(r *Response, w io.Writer) error {
 		return ErrInvalidResponse
 	}
 
-	var t = make([]byte, 2)
-	binary.LittleEndian.PutUint16(t, uint16(r.Type))
-	if _, err := w.Write(t); err != nil {
+	if err := bin.WriteUint16(w, uint16(r.Type)); err != nil {
 		return err
 	}
 
 	switch r.Type {
 	case Ok, Error:
-		size := make([]byte, 8)
-		binary.LittleEndian.PutUint64(size, uint64(len(r.Data)))
-		if _, err := w.Write(size); err != nil {
+		if err := bin.WriteUint32(w, uint32(len(r.Data))); err != nil {
 			return err
 		}
 

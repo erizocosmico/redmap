@@ -107,6 +107,21 @@ func (c *Client) Uninstall(id uuid.UUID) error {
 	return err
 }
 
+// Info retrieves the worker info.
+func (c *Client) Info() (*Info, error) {
+	var info Info
+	data, err := c.request(&proto.Request{Op: proto.Info})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := info.Decode(data); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}
+
 func (c *Client) request(r *proto.Request) ([]byte, error) {
 	conn, err := c.conn()
 	if err != nil {

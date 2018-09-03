@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,17 @@ func TestWorker(t *testing.T) {
 	require.NoError(err)
 	require.Equal([]byte("foo,"), result)
 
+	info, err := cli.Info()
+	require.NoError(err)
+
+	require.Equal(&Info{
+		Version:       "test",
+		Proto:         1,
+		Addr:          "0.0.0.0:9876",
+		ActiveJobs:    0,
+		InstalledJobs: 1,
+	}, info)
+
 	require.NoError(cli.Uninstall(id))
 
 	result, err = cli.ExecMap(id, []byte("foo"))
@@ -49,11 +61,16 @@ func newServer(t *testing.T) (string, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	addr := "0.0.0.0:9876"
-	server := NewServer(addr, nil)
+	server := NewServer(addr, &ServerOptions{
+		Version: "test",
+	})
 
 	go func() {
 		require.NoError(t, server.Start(ctx))
 	}()
+
+	// Server needs some time to start.
+	time.Sleep(50 * time.Millisecond)
 
 	return addr, cancel
 }

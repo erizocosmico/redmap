@@ -1,20 +1,23 @@
 package proto
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 
+	"github.com/erizocosmico/redmap/internal/bin"
 	uuid "github.com/satori/go.uuid"
 )
 
-func readSize(r io.Reader) (uint64, error) {
-	var b = make([]byte, 8)
-	if _, err := io.ReadFull(r, b); err != nil {
+// Version of the protocol.
+const Version = 1
+
+func readSize(r io.Reader) (uint32, error) {
+	sz, err := bin.ReadUint32(r)
+	if err != nil {
 		return 0, fmt.Errorf("proto: can't read size: %s", err)
 	}
 
-	return binary.LittleEndian.Uint64(b), nil
+	return sz, nil
 }
 
 func readID(r io.Reader) (uuid.UUID, error) {

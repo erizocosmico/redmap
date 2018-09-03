@@ -30,6 +30,12 @@ func newJobRegistry() *jobRegistry {
 	}
 }
 
+func (r *jobRegistry) count() int {
+	r.RLock()
+	defer r.RUnlock()
+	return len(r.registry)
+}
+
 func (r *jobRegistry) get(id uuid.UUID) (redmap.Job, bool) {
 	r.RLock()
 	j, ok := r.registry[id]

@@ -1,11 +1,11 @@
 package proto
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 
+	"github.com/erizocosmico/redmap/internal/bin"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -23,6 +23,8 @@ const (
 	HealthCheck
 	// Uninstall a plugin for a job.
 	Uninstall
+	// Info returns the server info.
+	Info
 	lastOp
 )
 
@@ -62,7 +64,7 @@ func ParseRequest(r io.Reader, maxSize int32) (*Request, error) {
 			return nil, err
 		}
 
-		if size > uint64(maxSize) {
+		if size > uint32(maxSize) {
 			return nil, ErrTooLarge
 		}
 
@@ -75,7 +77,7 @@ func ParseRequest(r io.Reader, maxSize int32) (*Request, error) {
 		if err != nil {
 			return nil, err
 		}
-	case HealthCheck:
+	case HealthCheck, Info:
 		// nothing to do here
 	default:
 		return nil, ErrInvalidOp
@@ -85,12 +87,12 @@ func ParseRequest(r io.Reader, maxSize int32) (*Request, error) {
 }
 
 func readOp(r io.Reader) (Op, error) {
-	var b = make([]byte, 2)
-	if _, err := io.ReadFull(r, b); err != nil {
+	n, err := bin.ReadUint16(r)
+	if err != nil {
 		return Invalid, fmt.Errorf("proto: can't read op: %s", err)
 	}
 
-	o := Op(binary.LittleEndian.Uint16(b))
+	o := Op(n)
 	if o == Invalid || o >= lastOp {
 		return Invalid, fmt.Errorf("proto: invalid operation %d", o)
 	}
@@ -104,9 +106,7 @@ func WriteRequest(r *Request, w io.Writer) error {
 		return ErrInvalidOp
 	}
 
-	var op = make([]byte, 2)
-	binary.LittleEndian.PutUint16(op, uint16(r.Op))
-	if _, err := w.Write(op); err != nil {
+	if err := bin.WriteUint16(w, uint16(r.Op)); err != nil {
 		return err
 	}
 
@@ -116,9 +116,7 @@ func WriteRequest(r *Request, w io.Writer) error {
 			return err
 		}
 
-		size := make([]byte, 8)
-		binary.LittleEndian.PutUint64(size, uint64(len(r.Data)))
-		if _, err := w.Write(size); err != nil {
+		if err := bin.WriteUint32(w, uint32(len(r.Data))); err != nil {
 			return err
 		}
 
@@ -129,7 +127,7 @@ func WriteRequest(r *Request, w io.Writer) error {
 		if _, err := w.Write(r.ID[:]); err != nil {
 			return err
 		}
-	case HealthCheck:
+	case HealthCheck, Info:
 		// done here
 	}
 
