@@ -25,9 +25,9 @@ const (
 	Hello
 	// Stats returns a series of useful statistics about running jobs.
 	Stats
-	// Attach a new worker to the master.
+	// Attach a new worker to the manager.
 	Attach
-	// Detach a worker from the master.
+	// Detach a worker from the manager.
 	Detach
 	lastOp
 )
