@@ -2,6 +2,7 @@ module github.com/erizocosmico/redmap
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/fatih/pool v3.0.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/golang/protobuf v1.2.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect

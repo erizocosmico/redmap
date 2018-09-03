@@ -3,11 +3,15 @@ package worker
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"time"
 
 	"github.com/erizocosmico/redmap/internal/worker/proto"
+	"github.com/fatih/pool"
 	uuid "github.com/satori/go.uuid"
 )
+
+var defaultMaxConnections = runtime.NumCPU()
 
 // Client executes operations on a worker.
 type Client struct {
@@ -15,6 +19,7 @@ type Client struct {
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 	maxSize      int32
+	pool         pool.Pool
 }
 
 // ClientOptions provides configuration options for the worker client.
@@ -28,6 +33,9 @@ type ClientOptions struct {
 	// MaxSize is the maximum amount of bytes allowed in responses from the
 	// server. By default, it's 200MB.
 	MaxSize int32
+	// MaxConnections is the maximum number of simultaneous connections with
+	// the worker to keep.
+	MaxConnections int
 }
 
 // NewClient creates a new client to operate a specific worker.
@@ -40,20 +48,45 @@ func NewClient(
 ) (*Client, error) {
 	var readTimeout, writeTimeout time.Duration
 	var maxSize = defaultMaxSize
+	var maxConnections = defaultMaxConnections
 	if opts != nil {
 		readTimeout = opts.ReadTimeout
 		writeTimeout = opts.WriteTimeout
 		if opts.MaxSize > 0 {
 			maxSize = opts.MaxSize
 		}
+
+		if opts.MaxConnections > 0 {
+			maxConnections = opts.MaxConnections
+		}
 	}
-	return &Client{addr, readTimeout, writeTimeout, maxSize}, nil
+
+	pool, err := pool.NewChannelPool(1, maxConnections, func() (net.Conn, error) {
+		return net.Dial("tcp", addr)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &Client{
+		addr,
+		readTimeout,
+		writeTimeout,
+		maxSize,
+		pool,
+	}, nil
+}
+
+// Close all the connections in the client.
+func (c *Client) Close() error {
+	c.pool.Close()
+	return nil
 }
 
 func (c *Client) conn() (net.Conn, error) {
-	conn, err := net.Dial("tcp", c.addr)
+	conn, err := c.pool.Get()
 	if err != nil {
-		return nil, fmt.Errorf("can't create worker client: %s", err)
+		return nil, fmt.Errorf("can't establish connection with worker at %s: %s", c.addr, err)
 	}
 
 	if c.readTimeout > 0 {
@@ -132,12 +165,12 @@ func (c *Client) request(r *proto.Request) ([]byte, error) {
 
 	err = proto.WriteRequest(r, conn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not write request: %s", err)
 	}
 
 	resp, err := proto.ParseResponse(conn, c.maxSize)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not parse response: %s", err)
 	}
 
 	switch resp.Type {

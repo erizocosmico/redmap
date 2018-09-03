@@ -3,7 +3,9 @@ package worker
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/erizocosmico/redmap/internal/worker/proto"
@@ -23,6 +25,7 @@ type Server struct {
 	maxSize    int32
 	activeJobs int32
 	jobs       *jobRegistry
+	conns      sync.WaitGroup
 }
 
 // ServerOptions provides configuration options for the worker server.
@@ -67,6 +70,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	defer l.Close()
+	defer s.conns.Wait()
 
 	for {
 		select {
@@ -80,6 +84,7 @@ func (s *Server) Start(ctx context.Context) error {
 			return err
 		}
 
+		s.conns.Add(1)
 		go s.handleConn(ctx, conn)
 	}
 }
@@ -94,20 +99,27 @@ func (s *Server) decr() {
 
 func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+	defer s.conns.Done()
 
-	req, err := proto.ParseRequest(conn, s.maxSize)
-	if err != nil {
-		s.writeError(conn, err)
-		return
+	for {
+		req, err := proto.ParseRequest(conn, s.maxSize)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			s.writeError(conn, err)
+			return
+		}
+
+		resp, err := s.handleRequest(ctx, conn, req)
+		if err != nil {
+			s.writeError(conn, err)
+			return
+		}
+
+		s.writeResponse(conn, &proto.Response{Type: proto.Ok, Data: resp})
 	}
-
-	resp, err := s.handleRequest(ctx, conn, req)
-	if err != nil {
-		s.writeError(conn, err)
-		return
-	}
-
-	s.writeResponse(conn, &proto.Response{Type: proto.Ok, Data: resp})
 }
 
 func (s *Server) info() Info {

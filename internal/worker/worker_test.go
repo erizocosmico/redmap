@@ -18,7 +18,8 @@ func TestWorker(t *testing.T) {
 	addr, stop := newServer(t)
 	defer stop()
 
-	cli := newClient(t, addr)
+	cli, cleanup := newClient(t, addr)
+	defer cleanup()
 
 	require.NoError(cli.HealthCheck())
 
@@ -49,11 +50,13 @@ func TestWorker(t *testing.T) {
 	require.Error(err)
 }
 
-func newClient(t *testing.T, addr string) *Client {
+func newClient(t *testing.T, addr string) (*Client, func()) {
 	t.Helper()
 	c, err := NewClient(addr, nil)
 	require.NoError(t, err)
-	return c
+	return c, func() {
+		require.NoError(t, c.Close())
+	}
 }
 
 func newServer(t *testing.T) (string, context.CancelFunc) {

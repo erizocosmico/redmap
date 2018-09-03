@@ -1,5 +1,7 @@
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/fatih/pool v3.0.0+incompatible
+github.com/fatih/pool
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/satori/go.uuid v1.2.0
