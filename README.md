@@ -9,9 +9,9 @@ Distributed golang map-reduce jobs using Go plugins.
 - [x] Worker proto
 - [x] Worker client
 - [x] Worker server
-- [ ] Master proto
-- [ ] Master client
-- [ ] Master server
+- [x] Manager proto
+- [ ] Manager client
+- [ ] Manager server
 - [ ] Worker CLI
 - [ ] Master CLI
 - [ ] Send jobs via CLI

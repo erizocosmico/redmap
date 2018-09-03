@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/erizocosmico/redmap/internal/proto"
+	"github.com/erizocosmico/redmap/internal/worker/proto"
 	uuid "github.com/satori/go.uuid"
 )
 

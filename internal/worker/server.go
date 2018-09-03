@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/erizocosmico/redmap/internal/proto"
+	"github.com/erizocosmico/redmap/internal/worker/proto"
 	"github.com/sirupsen/logrus"
 )
 

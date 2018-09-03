@@ -28,10 +28,14 @@ const (
 	lastOp
 )
 
-// Request to a worker or master.
+// Request to a worker.
 type Request struct {
-	Op   Op
-	ID   uuid.UUID
+	// Op is the type of the request. Must not be empty.
+	Op Op
+	// ID is used to reference that a request must be performed on a specific
+	// job. It may be empty.
+	ID uuid.UUID
+	// Data is any additional data sent along with the request. May be empty.
 	Data []byte
 }
 
@@ -116,11 +120,7 @@ func WriteRequest(r *Request, w io.Writer) error {
 			return err
 		}
 
-		if err := bin.WriteUint32(w, uint32(len(r.Data))); err != nil {
-			return err
-		}
-
-		if _, err := w.Write(r.Data); err != nil {
+		if err := bin.WriteBytes(w, r.Data); err != nil {
 			return err
 		}
 	case Uninstall:
