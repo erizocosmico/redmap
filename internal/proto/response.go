@@ -49,16 +49,12 @@ func ParseResponse(r io.Reader, maxSize uint64) (*Response, error) {
 			return nil, ErrTooLarge
 		}
 
-		data = make([]byte, int(maxSize))
+		data = make([]byte, int(size))
 		if _, err := io.ReadFull(r, data); err != nil {
 			return nil, fmt.Errorf("proto: can't read response data: %s", err)
 		}
 	default:
 		return nil, ErrInvalidResponse
-	}
-
-	if err := expectEOF(r); err != nil {
-		return nil, err
 	}
 
 	return &Response{Type: t, Data: data}, nil

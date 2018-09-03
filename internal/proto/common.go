@@ -25,16 +25,3 @@ func readID(r io.Reader) (uuid.UUID, error) {
 
 	return uuid.FromBytes(b)
 }
-
-func expectEOF(r io.Reader) error {
-	var b = make([]byte, 1)
-	if _, err := io.ReadFull(r, b); err != nil {
-		if err == io.EOF {
-			return nil
-		}
-
-		return fmt.Errorf("proto: can't check EOF: %s", err)
-	}
-
-	return fmt.Errorf("proto: expecting EOF")
-}

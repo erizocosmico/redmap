@@ -66,7 +66,7 @@ func ParseRequest(r io.Reader, maxSize uint64) (*Request, error) {
 			return nil, ErrTooLarge
 		}
 
-		data = make([]byte, int(maxSize))
+		data = make([]byte, int(size))
 		if _, err := io.ReadFull(r, data); err != nil {
 			return nil, fmt.Errorf("proto: can't read request data: %s", err)
 		}
@@ -79,10 +79,6 @@ func ParseRequest(r io.Reader, maxSize uint64) (*Request, error) {
 		// nothing to do here
 	default:
 		return nil, ErrInvalidOp
-	}
-
-	if err := expectEOF(r); err != nil {
-		return nil, err
 	}
 
 	return &Request{Op: op, ID: id, Data: data}, nil

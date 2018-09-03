@@ -80,7 +80,7 @@ func (c *Client) ExecMap(id uuid.UUID, data []byte) ([]byte, error) {
 // Uninstall removes the plugin of the job with the given id from the worker.
 func (c *Client) Uninstall(id uuid.UUID) error {
 	_, err := c.request(&proto.Request{
-		Op: proto.Install,
+		Op: proto.Uninstall,
 		ID: id,
 	})
 	return err

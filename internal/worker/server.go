@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/erizocosmico/redmap/internal/proto"
+	"github.com/sirupsen/logrus"
 )
 
 // Server is a worker server that handles connections from a master.
@@ -112,6 +113,6 @@ func (s *Server) writeError(conn net.Conn, err error) {
 
 func (s *Server) writeResponse(conn net.Conn, r *proto.Response) {
 	if err := proto.WriteResponse(r, conn); err != nil {
-		// TODO: handle error
+		logrus.WithField("err", err).Error("unable to write response")
 	}
 }
