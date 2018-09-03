@@ -9,19 +9,38 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	kb             = int32(1024)
+	mb             = 1024 * kb
+	defaultMaxSize = 200 * mb
+)
+
 // Server is a worker server that handles connections from a master.
 type Server struct {
 	addr    string
-	maxSize uint64
+	maxSize int32
 	jobs    *jobRegistry
+}
+
+// ServerOptions provides configuration options for the worker server.
+type ServerOptions struct {
+	// MaxSize is the maximum allowed size for job data. By default, the max
+	// size is 200MB.
+	MaxSize int32
 }
 
 // NewServer creates a new worker server. MaxSize controls the maximum size
 // allowed in request data.
 func NewServer(
 	addr string,
-	maxSize uint64,
+	opts *ServerOptions,
 ) *Server {
+	maxSize := defaultMaxSize
+	if opts != nil {
+		if opts.MaxSize > 0 {
+			maxSize = opts.MaxSize
+		}
+	}
 	return &Server{
 		addr:    addr,
 		maxSize: maxSize,

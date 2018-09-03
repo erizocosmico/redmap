@@ -31,7 +31,7 @@ var ErrInvalidResponse = errors.New("invalid response")
 
 // ParseResponse parses a response from the given reader. MaxSize controls
 // the maximum allowed size of the data inside the response.
-func ParseResponse(r io.Reader, maxSize uint64) (*Response, error) {
+func ParseResponse(r io.Reader, maxSize int32) (*Response, error) {
 	t, err := readResponseType(r)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func ParseResponse(r io.Reader, maxSize uint64) (*Response, error) {
 			return nil, err
 		}
 
-		if size > maxSize {
+		if size > uint64(maxSize) {
 			return nil, ErrTooLarge
 		}
 

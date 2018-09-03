@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +21,8 @@ func TestWorker(t *testing.T) {
 
 	require.NoError(cli.HealthCheck())
 
-	data := compilePlugin(t)
+	data, cleanup := compilePlugin(t)
+	defer cleanup()
 	id := uuid.NewV4()
 
 	require.NoError(cli.Install(id, data))
@@ -39,7 +39,7 @@ func TestWorker(t *testing.T) {
 
 func newClient(t *testing.T, addr string) *Client {
 	t.Helper()
-	c, err := NewClient(addr, 0, 0, math.MaxUint64)
+	c, err := NewClient(addr, nil)
 	require.NoError(t, err)
 	return c
 }
@@ -49,7 +49,7 @@ func newServer(t *testing.T) (string, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	addr := "0.0.0.0:9876"
-	server := NewServer(addr, math.MaxUint64)
+	server := NewServer(addr, nil)
 
 	go func() {
 		require.NoError(t, server.Start(ctx))
@@ -58,7 +58,7 @@ func newServer(t *testing.T) (string, context.CancelFunc) {
 	return addr, cancel
 }
 
-func compilePlugin(t *testing.T) []byte {
+func compilePlugin(t *testing.T) ([]byte, func()) {
 	t.Helper()
 	require := require.New(t)
 
@@ -78,5 +78,7 @@ func compilePlugin(t *testing.T) []byte {
 	data, err := ioutil.ReadFile(dst)
 	require.NoError(err)
 
-	return data
+	return data, func() {
+		require.NoError(os.Remove(dst))
+	}
 }

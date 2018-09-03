@@ -14,7 +14,20 @@ type Client struct {
 	addr         string
 	readTimeout  time.Duration
 	writeTimeout time.Duration
-	maxSize      uint64
+	maxSize      int32
+}
+
+// ClientOptions provides configuration options for the worker client.
+type ClientOptions struct {
+	// WriteTimeout is the maximum time to wait for a write operation before
+	// it is cancelled.
+	WriteTimeout time.Duration
+	// ReadTimeout is the maximum time to wait for a read operation before
+	// it is cancelled.
+	ReadTimeout time.Duration
+	// MaxSize is the maximum amount of bytes allowed in responses from the
+	// server. By default, it's 200MB.
+	MaxSize int32
 }
 
 // NewClient creates a new client to operate a specific worker.
@@ -23,9 +36,17 @@ type Client struct {
 // response data.
 func NewClient(
 	addr string,
-	writeTimeout, readTimeout time.Duration,
-	maxSize uint64,
+	opts *ClientOptions,
 ) (*Client, error) {
+	var readTimeout, writeTimeout time.Duration
+	var maxSize = defaultMaxSize
+	if opts != nil {
+		readTimeout = opts.ReadTimeout
+		writeTimeout = opts.WriteTimeout
+		if opts.MaxSize > 0 {
+			maxSize = opts.MaxSize
+		}
+	}
 	return &Client{addr, readTimeout, writeTimeout, maxSize}, nil
 }
 

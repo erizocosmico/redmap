@@ -42,7 +42,7 @@ var (
 
 // ParseRequest parses a request from the given reader. MaxSize controls
 // the maximum allowed size of the data inside the request.
-func ParseRequest(r io.Reader, maxSize uint64) (*Request, error) {
+func ParseRequest(r io.Reader, maxSize int32) (*Request, error) {
 	op, err := readOp(r)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func ParseRequest(r io.Reader, maxSize uint64) (*Request, error) {
 			return nil, err
 		}
 
-		if size > maxSize {
+		if size > uint64(maxSize) {
 			return nil, ErrTooLarge
 		}
 
