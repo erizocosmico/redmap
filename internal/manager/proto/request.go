@@ -153,7 +153,7 @@ func (d *JobData) Decode(b []byte) error {
 }
 
 // Encode the job data to bytes.
-func (d *JobData) Encode() ([]byte, error) {
+func (d JobData) Encode() ([]byte, error) {
 	var w = bytes.NewBuffer(nil)
 	if err := bin.WriteString(w, d.Name); err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func (d *WorkerData) Decode(b []byte) error {
 }
 
 // Encode the worker data to bytes.
-func (d *WorkerData) Encode() ([]byte, error) {
+func (d WorkerData) Encode() ([]byte, error) {
 	var w = bytes.NewBuffer(nil)
 	if err := bin.WriteString(w, d.Addr); err != nil {
 		return nil, err

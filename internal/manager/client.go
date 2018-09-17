@@ -97,25 +97,81 @@ var ErrNotImplemented = errors.New("operation not implemented")
 // Hello acts as a healthcheck and provides some info about the manager
 // server.
 func (c *Client) Hello() (*Info, error) {
-	return nil, ErrNotImplemented
+	data, err := c.request(&proto.Request{
+		Op: proto.Hello,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var info Info
+	if err := info.Decode(data); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
 }
 
 // RunJob runs an job on the cluster.
 func (c *Client) RunJob(name string, id uuid.UUID, plugin []byte) error {
-	return ErrNotImplemented
+	data, err := proto.JobData{
+		ID:     id,
+		Name:   name,
+		Plugin: plugin,
+	}.Encode()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.request(&proto.Request{
+		Op:   proto.RunJob,
+		Data: data,
+	})
+	return err
 }
 
 // Stats returns a series of useful statistics about running jobs.
 func (c *Client) Stats() (*Stats, error) {
-	return nil, ErrNotImplemented
+	data, err := c.request(&proto.Request{
+		Op: proto.Stats,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var stats Stats
+	if err := stats.Decode(data); err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
 }
 
 // Attach a new worker to the manager.
 func (c *Client) Attach(addr string) error {
-	return ErrNotImplemented
+	// TODO(erizocosmico): handle auth
+	data, err := proto.WorkerData{Addr: addr}.Encode()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.request(&proto.Request{
+		Op:   proto.Attach,
+		Data: data,
+	})
+	return err
 }
 
 // Detach a worker from the manager.
 func (c *Client) Detach(addr string) error {
-	return ErrNotImplemented
+	data, err := proto.WorkerData{Addr: addr}.Encode()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.request(&proto.Request{
+		Op:   proto.Detach,
+		Data: data,
+	})
+	return err
 }

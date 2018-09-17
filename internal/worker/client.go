@@ -3,7 +3,6 @@ package worker
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"time"
 
 	"github.com/erizocosmico/redmap/internal/worker/proto"
@@ -11,7 +10,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-var defaultMaxConnections = runtime.NumCPU()
+const defaultMaxConnections = 4
 
 // Client executes operations on a worker.
 type Client struct {

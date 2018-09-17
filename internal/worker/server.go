@@ -13,9 +13,7 @@ import (
 )
 
 const (
-	kb             = int32(1024)
-	mb             = 1024 * kb
-	defaultMaxSize = 200 * mb
+	defaultMaxSize int32 = 200 * 1024 * 1024
 )
 
 // Server is a worker server that handles connections from a master.
@@ -115,7 +113,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		resp, err := s.handleRequest(ctx, conn, req)
 		if err != nil {
 			s.writeError(conn, err)
-			return
+			continue
 		}
 
 		s.writeResponse(conn, &proto.Response{Type: proto.Ok, Data: resp})

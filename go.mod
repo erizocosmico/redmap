@@ -1,6 +1,7 @@
 module github.com/erizocosmico/redmap
 
 require (
+	github.com/cenkalti/backoff v2.0.0+incompatible
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/pool v3.0.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
