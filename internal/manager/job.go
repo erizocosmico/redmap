@@ -9,16 +9,12 @@ import (
 	"plugin"
 	"sort"
 	"sync"
-	"time"
 
-	"github.com/cenkalti/backoff"
 	"github.com/erizocosmico/redmap"
 	"github.com/erizocosmico/redmap/internal/manager/proto"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
-
-const installTimeout = 1 * time.Minute
 
 // ErrNoWorkersAvailable is returned when there are no more available workers
 // to take a job.
@@ -85,17 +81,6 @@ func (jm *jobManager) run(data *proto.JobData) error {
 	r := newJobRunner(jm.ctx, j, jm.workers, data.Plugin, jm.maxRetries)
 	go r.run()
 
-	// register job
-	// install job
-	// load channel
-	// select list of workers to work on this job
-	// send tasks to workers
-	// perform reduce on responses
-	// terminate workers if they're awaiting termination
-	// dispose all resources after job is done
-	// update stats
-	// report failures, etc
-	// uninstall job from workers
 	return nil
 }
 
@@ -262,16 +247,13 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	}
 
 	var result []byte
-	err = backoff.Retry(func() error {
-		cli, err := worker.client()
-		if err != nil {
-			return err
-		}
+	cli, err := worker.client()
+	if err != nil {
+		requeue(err)
+		return
+	}
 
-		result, err = cli.ExecMap(r.job.id, task.data)
-		return err
-	}, backoff.NewExponentialBackOff())
-
+	result, err = cli.ExecMap(r.job.id, task.data)
 	if err != nil {
 		// TODO(erizocosmico): handle if it's job error or worker error
 		requeue(err)

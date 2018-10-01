@@ -118,7 +118,6 @@ func (s *Server) handleRequest(
 		return nil, nil
 	case proto.Uninstall:
 		if s.OnUninstall != nil {
-			fmt.Println("hninstall")
 			s.OnUninstall(r.ID)
 		}
 

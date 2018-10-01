@@ -83,9 +83,13 @@ func TestWorker(t *testing.T) {
 	require.Error(worker.checkAvailability(50 * time.Millisecond))
 
 	var uninstalled = make(map[uuid.UUID]bool)
+	var installed = make(map[uuid.UUID][]byte)
 	server := workertest.NewServer(worker.addr, workertest.Hooks{
 		OnUninstall: func(id uuid.UUID) {
 			uninstalled[id] = true
+		},
+		OnInstall: func(id uuid.UUID, plugin []byte) {
+			installed[id] = plugin
 		},
 	})
 
@@ -94,12 +98,24 @@ func TestWorker(t *testing.T) {
 
 	go server.Start(ctx)
 
+	plugin := []byte{1, 2, 3, 4}
+	require.NoError(worker.install(id1, plugin))
+	require.Equal(
+		map[uuid.UUID][]byte{
+			id1: plugin,
+		},
+		installed,
+	)
+	require.Len(worker.installed, 1)
+	worker.close()
+
 	require.NoError(worker.checkAvailability(50 * time.Millisecond))
 
 	worker.processed(id1)
 	require.True(terminated)
 	require.True(uninstalled[id1])
 	require.True(uninstalled[id2])
+	require.Len(worker.installed, 0)
 
 	require.Equal(workerTerminated, worker.state)
 }

@@ -12,7 +12,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const clientConnectTimeout = 10 * time.Second
+const (
+	clientConnectTimeout = 10 * time.Second
+	installTimeout       = 1 * time.Minute
+)
 
 type workerPool struct {
 	mut     sync.RWMutex
@@ -105,15 +108,18 @@ type worker struct {
 	state         workerState
 	mut           sync.RWMutex
 	jobs          map[uuid.UUID]*workerJobs
+	installMut    sync.Mutex
+	installed     map[uuid.UUID]struct{}
 	onTermination func()
 }
 
 func newWorker(addr string, opts *workerlib.ClientOptions) *worker {
 	return &worker{
-		opts:  opts,
-		addr:  addr,
-		state: workerOk,
-		jobs:  make(map[uuid.UUID]*workerJobs),
+		opts:      opts,
+		addr:      addr,
+		state:     workerOk,
+		jobs:      make(map[uuid.UUID]*workerJobs),
+		installed: make(map[uuid.UUID]struct{}),
 	}
 }
 
@@ -291,5 +297,34 @@ func (w *worker) freeResources() {
 				"job":    id,
 			}).Error("unable to uninstall job from worker")
 		}
+
+		w.installMut.Lock()
+		delete(w.installed, id)
+		w.installMut.Unlock()
 	}
+}
+
+func (w *worker) install(id uuid.UUID, plugin []byte) error {
+	w.installMut.Lock()
+	defer w.installMut.Unlock()
+
+	if _, ok := w.installed[id]; ok {
+		return nil
+	}
+
+	cli, err := w.client()
+	if err != nil {
+		return err
+	}
+
+	err = Retry(installTimeout, func() error {
+		return cli.Install(id, plugin)
+	})
+
+	if err != nil {
+		return err
+	}
+
+	w.installed[id] = struct{}{}
+	return nil
 }
