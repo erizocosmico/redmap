@@ -66,7 +66,7 @@ func (s *Server) Start(ctx context.Context) error {
 			return err
 		}
 
-		s.handleConn(ctx, conn)
+		go s.handleConn(ctx, conn)
 	}
 }
 

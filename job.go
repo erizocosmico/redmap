@@ -16,6 +16,15 @@ type Job interface {
 	// another accumulator. Current can also be an accumulator when two
 	// partial accumulators are being merged.
 	Reduce(acc, current []byte) ([]byte, error)
+	// Done will receive the result once it's been computed. This may be used
+	// to store or process the result in some way.
+	Done(result []byte) error
+}
+
+// Countable is a job that can return the total number of tasks ahead of time.
+type Countable interface {
+	// Count returns the number of tasks in the job.
+	Count() (int32, error)
 }
 
 // Symbol is the name that must be exported in a redmap job.

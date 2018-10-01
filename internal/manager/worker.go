@@ -108,8 +108,8 @@ type worker struct {
 	state         workerState
 	mut           sync.RWMutex
 	jobs          map[uuid.UUID]*workerJobs
-	installMut    sync.Mutex
-	installed     map[uuid.UUID]struct{}
+	installMut    sync.RWMutex
+	installed     map[uuid.UUID]chan struct{}
 	onTermination func()
 }
 
@@ -119,7 +119,7 @@ func newWorker(addr string, opts *workerlib.ClientOptions) *worker {
 		addr:      addr,
 		state:     workerOk,
 		jobs:      make(map[uuid.UUID]*workerJobs),
-		installed: make(map[uuid.UUID]struct{}),
+		installed: make(map[uuid.UUID]chan struct{}),
 	}
 }
 
@@ -225,7 +225,9 @@ func (w *worker) pendingTasks() uint32 {
 func (w *worker) addJob(id uuid.UUID) {
 	w.mut.Lock()
 	defer w.mut.Unlock()
-	w.jobs[id] = new(workerJobs)
+	if _, ok := w.jobs[id]; !ok {
+		w.jobs[id] = new(workerJobs)
+	}
 }
 
 func (w *worker) processed(id uuid.UUID) {
@@ -304,13 +306,34 @@ func (w *worker) freeResources() {
 	}
 }
 
+func (w *worker) waitUntilInstalled(id uuid.UUID) {
+	w.installMut.RLock()
+	ch, ok := w.installed[id]
+	w.installMut.RUnlock()
+
+	if ok {
+		<-ch
+	}
+}
+
 func (w *worker) install(id uuid.UUID, plugin []byte) error {
 	w.installMut.Lock()
-	defer w.installMut.Unlock()
 
 	if _, ok := w.installed[id]; ok {
+		w.installMut.Unlock()
 		return nil
 	}
+
+	var ch = make(chan struct{}, 1)
+	w.installed[id] = ch
+	w.installMut.Unlock()
+
+	defer func() {
+		w.installMut.Lock()
+		delete(w.installed, id)
+		close(ch)
+		w.installMut.Unlock()
+	}()
 
 	cli, err := w.client()
 	if err != nil {
@@ -321,10 +344,5 @@ func (w *worker) install(id uuid.UUID, plugin []byte) error {
 		return cli.Install(id, plugin)
 	})
 
-	if err != nil {
-		return err
-	}
-
-	w.installed[id] = struct{}{}
-	return nil
+	return err
 }

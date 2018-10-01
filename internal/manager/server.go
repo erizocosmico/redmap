@@ -30,6 +30,7 @@ type Server struct {
 	maxSize     uint32
 	workerOpts  *WorkerOptions
 	forceDetach bool
+	maxRetries  int
 
 	conns   sync.WaitGroup
 	workers *workerPool
@@ -86,12 +87,14 @@ func NewServer(addr, version string, opts *ServerOptions) *Server {
 		workerOpts:  workerOptions,
 		forceDetach: forceDetach,
 		workers:     wp,
-		jobs:        newJobManager(wp, maxRetries),
+		maxRetries:  maxRetries,
 	}
 }
 
 // Start listenning to connections.
 func (s *Server) Start(ctx context.Context) error {
+	s.jobs = newJobManager(ctx, s.workers, s.maxRetries, true)
+
 	l, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return err

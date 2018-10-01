@@ -26,13 +26,21 @@ type jobManager struct {
 	jobs       map[uuid.UUID]*job
 	workers    *workerPool
 	maxRetries int
+	async      bool
 }
 
-func newJobManager(wp *workerPool, maxRetries int) *jobManager {
+func newJobManager(
+	ctx context.Context,
+	wp *workerPool,
+	maxRetries int,
+	async bool,
+) *jobManager {
 	return &jobManager{
 		jobs:       make(map[uuid.UUID]*job),
 		workers:    wp,
 		maxRetries: maxRetries,
+		ctx:        ctx,
+		async:      async,
 	}
 }
 
@@ -78,8 +86,28 @@ func (jm *jobManager) run(data *proto.JobData) error {
 		return err
 	}
 
-	r := newJobRunner(jm.ctx, j, jm.workers, data.Plugin, jm.maxRetries)
-	go r.run()
+	// Run the job asynchronously.
+	run := func() error {
+		r := newJobRunner(jm.ctx, j, jm.workers, data.Plugin, jm.maxRetries)
+		r.run()
+
+		if err := j.Done(j.accumulator); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"job":  data.ID,
+				"name": data.Name,
+				"err":  err,
+			}).Error("error occurred calling job Done hook")
+			return err
+		}
+
+		return nil
+	}
+
+	if !jm.async {
+		return run()
+	}
+
+	go run()
 
 	return nil
 }
@@ -119,6 +147,18 @@ func (jm *jobManager) install(data *proto.JobData) (*job, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tasks, errors := j.Load(ctx)
 
+	var total int32 = -1
+	if cnt, ok := j.(redmap.Countable); ok {
+		total, err = cnt.Count()
+		if err != nil {
+			total = -1
+			logrus.WithFields(logrus.Fields{
+				"job":  data.ID,
+				"name": data.Name,
+			}).Error("unable to get the total count of tasks for job")
+		}
+	}
+
 	return &job{
 		Job:        j,
 		id:         data.ID,
@@ -128,7 +168,7 @@ func (jm *jobManager) install(data *proto.JobData) (*job, error) {
 		loader:     tasks,
 		loadErrors: errors,
 		pluginPath: f.Name(),
-		total:      -1, // TODO(erizocosmico): add a way to preload total
+		total:      total,
 	}, nil
 }
 
@@ -166,40 +206,44 @@ func (r *jobRunner) run() {
 
 	ctx, cancel := context.WithCancel(r.ctx)
 
-Loop:
-	for {
-		select {
-		case <-r.ctx.Done():
-			r.job.cancel()
-			cancel()
-			break Loop
-		case task, ok := <-r.tasks:
-			if !ok {
-				// TODO(erizocosmico): set job as finished
+	go func() {
+		for {
+			select {
+			case <-r.ctx.Done():
 				r.job.cancel()
 				cancel()
-				break Loop
-			}
-
-			if task.retries > r.maxRetries {
-				r.errors <- task.lastError
-			} else {
-				go r.executeTask(ctx, task)
-			}
-		case err, ok := <-r.errors:
-			if ok {
-				r.job.failedTask(err)
-
-				if err == ErrNoWorkersAvailable {
+				return
+			case task, ok := <-r.tasks:
+				if !ok {
+					// TODO(erizocosmico): set job as finished
 					r.job.cancel()
 					cancel()
-					break Loop
+					break
+				}
+
+				if task.retries > r.maxRetries {
+					r.errors <- task.lastError
+				} else {
+					go r.executeTask(ctx, task)
+				}
+			case err, ok := <-r.errors:
+				if ok {
+					r.job.failedTask(err)
+
+					if err == ErrNoWorkersAvailable {
+						r.job.cancel()
+						cancel()
+						return
+					}
+				} else {
+					return
 				}
 			}
 		}
-	}
+	}()
 
 	r.Wait()
+	close(r.errors)
 }
 
 type task struct {
@@ -217,7 +261,14 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 		r.errors <- err
 		return
 	}
-	requiresInstallation := worker.isRunningJobTasks(r.job.id)
+
+	// We need to wait until the job is installed on the worker.
+	// TODO(erizocosmico): handle installation problems so we don't
+	// retry installs on a worker that previously errored.
+	worker.waitUntilInstalled(r.job.id)
+
+	requiresInstallation := !worker.isRunningJobTasks(r.job.id)
+	worker.addJob(r.job.id)
 
 	requeue := func(err error) {
 		r.Add(1)
@@ -231,19 +282,11 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	worker.running(r.job.id)
 
 	if requiresInstallation {
-		err = Retry(installTimeout, func() error {
-			cli, err := worker.client()
-			if err != nil {
-				return err
-			}
-
-			return cli.Install(r.job.id, r.plugin)
-		})
-	}
-
-	if err != nil {
-		requeue(err)
-		return
+		err := worker.install(r.job.id, r.plugin)
+		if err != nil {
+			requeue(err)
+			return
+		}
 	}
 
 	var result []byte
@@ -304,7 +347,6 @@ func (r *jobRunner) produce() {
 	cleanup := func() {
 		r.job.cancel()
 		close(r.tasks)
-		close(r.errors)
 		r.job.loadErrors = nil
 		r.job.loader = nil
 	}
