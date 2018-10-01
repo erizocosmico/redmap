@@ -19,6 +19,8 @@ const (
 	defaultReadTimeout                 = 3 * time.Minute
 	defaultWriteTimeout                = 30 * time.Second
 	defaultMaxRetries                  = 4
+
+	attachWorkerTimeout = 10 * time.Second
 )
 
 // Server is a manager server.
@@ -188,7 +190,7 @@ func (s *Server) hello() ([]byte, error) {
 
 func (s *Server) attachWorker(addr string) error {
 	w := newWorker(addr, s.workerOpts)
-	if err := w.checkAvailability(); err != nil {
+	if err := w.checkAvailability(attachWorkerTimeout); err != nil {
 		return fmt.Errorf("unable to connect to worker at %q: %s", addr, err)
 	}
 
@@ -208,6 +210,10 @@ func (s *Server) detachWorker(addr string) error {
 
 	if s.forceDetach {
 		logrus.Warn("forcing worker detach is activated but not implemented")
+	}
+
+	if w.isAwaitingTermination() {
+		return fmt.Errorf("worker at %s is already awaiting termination", w.addr)
 	}
 
 	w.awaitTermination(func() {

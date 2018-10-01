@@ -55,9 +55,15 @@ func Authenticate(data []byte) error {
 
 	var a Authenticator
 	switch method {
-	case None:
+	case NoneMethod:
 		return nil
-	case Password:
+	case PasswordMethod:
 		a = nil // TODO
 	}
+
+	if a != nil {
+		return a.Auth(data)
+	}
+
+	return fmt.Errorf("not implemented yet")
 }

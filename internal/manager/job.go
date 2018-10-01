@@ -58,16 +58,16 @@ func (jm *jobManager) allocate(id uuid.UUID) error {
 
 func (jm *jobManager) run(data *proto.JobData) error {
 	if err := jm.allocate(data.ID); err != nil {
-		return nil
+		return err
 	}
 
 	j, err := jm.install(data)
 	if err != nil {
 		j = &job{
-			id:          data.ID,
-			name:        data.Name,
-			state:       jobErrored,
-			errorReason: err,
+			id:     data.ID,
+			name:   data.Name,
+			state:  jobErrored,
+			errors: []error{err},
 		}
 	}
 
@@ -145,6 +145,7 @@ func (jm *jobManager) install(data *proto.JobData) (*job, error) {
 }
 
 type jobRunner struct {
+	sync.WaitGroup
 	ctx        context.Context
 	job        *job
 	workers    *workerPool
@@ -177,18 +178,19 @@ func (r *jobRunner) run() {
 
 	ctx, cancel := context.WithCancel(r.ctx)
 
+Loop:
 	for {
 		select {
 		case <-r.ctx.Done():
 			r.job.cancel()
 			cancel()
-			return
+			break Loop
 		case task, ok := <-r.tasks:
 			if !ok {
 				// TODO(erizocosmico): set job as finished
 				r.job.cancel()
 				cancel()
-				return
+				break Loop
 			}
 
 			if task.retries > r.maxRetries {
@@ -203,11 +205,13 @@ func (r *jobRunner) run() {
 				if err == ErrNoWorkersAvailable {
 					r.job.cancel()
 					cancel()
-					return
+					break Loop
 				}
 			}
 		}
 	}
+
+	r.Wait()
 }
 
 type task struct {
@@ -217,6 +221,8 @@ type task struct {
 }
 
 func (r *jobRunner) executeTask(ctx context.Context, task task) {
+	defer r.Done()
+
 	r.job.runningTask()
 	worker, err := r.pickWorker(r.job.id)
 	if err != nil {
@@ -225,6 +231,7 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	}
 
 	requeue := func(err error) {
+		r.Add(1)
 		task.retries++
 		task.lastError = err
 		r.tasks <- task
@@ -324,6 +331,7 @@ func (r *jobRunner) produce() {
 				cleanup()
 				return
 			}
+			r.Add(1)
 			r.tasks <- task{data: data}
 		case err := <-r.job.loadErrors:
 			r.errors <- err
@@ -342,14 +350,13 @@ const (
 
 type job struct {
 	redmap.Job
-	id          uuid.UUID
-	name        string
-	state       jobState
-	loader      <-chan []byte
-	loadErrors  <-chan error
-	pluginPath  string
-	cancel      context.CancelFunc
-	errorReason error
+	id         uuid.UUID
+	name       string
+	state      jobState
+	loader     <-chan []byte
+	loadErrors <-chan error
+	pluginPath string
+	cancel     context.CancelFunc
 
 	mut         sync.RWMutex
 	errors      []error
@@ -382,7 +389,8 @@ func (j *job) processedTask() {
 func (j *job) reduce(step []byte) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			// TODO(erizocosmico): handle panic inside reduce
+			// TODO(erizocosmico): requeue reduce jobs
+			err = fmt.Errorf("unable to reduce: %v", r)
 		}
 	}()
 

@@ -3,12 +3,16 @@ package manager
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
+	"time"
 
-	"github.com/cenkalti/backoff"
 	workerlib "github.com/erizocosmico/redmap/internal/worker"
 	uuid "github.com/satori/go.uuid"
+	"github.com/sirupsen/logrus"
 )
+
+const clientConnectTimeout = 10 * time.Second
 
 type workerPool struct {
 	mut     sync.RWMutex
@@ -27,6 +31,11 @@ func (p *workerPool) all() []*worker {
 	for _, w := range p.workers {
 		result = append(result, w)
 	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return strings.Compare(result[i].addr, result[j].addr) <= 0
+	})
+
 	return result
 }
 
@@ -79,6 +88,7 @@ type workerState byte
 const (
 	workerOk workerState = iota
 	workerAwaitingTermination
+	workerTerminated
 	workerFailing
 )
 
@@ -137,25 +147,31 @@ func (w *worker) isAwaitingTermination() bool {
 	return w.state == workerAwaitingTermination
 }
 
+func (w *worker) isTerminated() bool {
+	w.mut.RLock()
+	defer w.mut.RUnlock()
+	return w.state == workerTerminated
+}
+
 func (w *worker) awaitTermination(handler func()) {
 	w.mut.Lock()
+	defer w.mut.Unlock()
 	w.state = workerAwaitingTermination
 	w.onTermination = handler
-	w.mut.Unlock()
 }
 
 func (w *worker) terminate() {
-	w.mut.RLock()
+	w.mut.Lock()
+	defer w.mut.Unlock()
+	w.state = workerTerminated
 
 	if w.onTermination != nil {
 		w.onTermination()
 	}
-
-	w.mut.RUnlock()
 }
 
-func (w *worker) checkAvailability() error {
-	return backoff.Retry(func() error {
+func (w *worker) checkAvailability(timeout time.Duration) error {
+	return Retry(timeout, func() error {
 		cli, err := workerlib.NewClient(w.addr, w.opts)
 		if err != nil {
 			return err
@@ -164,7 +180,7 @@ func (w *worker) checkAvailability() error {
 		defer cli.Close()
 
 		return cli.HealthCheck()
-	}, backoff.NewExponentialBackOff())
+	})
 }
 
 func (w *worker) client() (*workerlib.Client, error) {
@@ -172,7 +188,7 @@ func (w *worker) client() (*workerlib.Client, error) {
 	defer w.mut.Unlock()
 
 	if w.cli == nil {
-		err := backoff.Retry(func() error {
+		err := Retry(clientConnectTimeout, func() error {
 			var err error
 			w.cli, err = workerlib.NewClient(w.addr, w.opts)
 			if err != nil {
@@ -180,7 +196,7 @@ func (w *worker) client() (*workerlib.Client, error) {
 			}
 
 			return w.cli.HealthCheck()
-		}, backoff.NewExponentialBackOff())
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -202,8 +218,8 @@ func (w *worker) pendingTasks() uint32 {
 
 func (w *worker) addJob(id uuid.UUID) {
 	w.mut.Lock()
+	defer w.mut.Unlock()
 	w.jobs[id] = new(workerJobs)
-	w.mut.Unlock()
 }
 
 func (w *worker) processed(id uuid.UUID) {
@@ -236,13 +252,44 @@ func (w *worker) failed(id uuid.UUID) {
 
 func (w *worker) running(id uuid.UUID) {
 	w.mut.Lock()
+	defer w.mut.Unlock()
 	w.jobs[id].running++
-	w.mut.Unlock()
 }
 
 func (w *worker) terminateIfDone() {
-	if w.pendingTasks() > 0 {
-		// TODO(erizocosmico): free resources (plugins) on termination
+	if w.pendingTasks() == 0 && !w.isTerminated() {
 		w.terminate()
+		w.freeResources()
+		w.close()
+	}
+}
+
+func (w *worker) close() {
+	w.mut.Lock()
+	defer w.mut.Unlock()
+
+	if w.cli != nil {
+		if err := w.cli.Close(); err != nil {
+			logrus.Errorf("unable to close client for worker at %s", w.addr)
+		}
+
+		w.cli = nil
+	}
+}
+
+func (w *worker) freeResources() {
+	for id := range w.jobs {
+		cli, err := w.client()
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"worker": w.addr,
+				"job":    id,
+			}).Error("unable connect to worker worker to uninstall job")
+		} else if err := cli.Uninstall(id); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"worker": w.addr,
+				"job":    id,
+			}).Error("unable to uninstall job from worker")
+		}
 	}
 }
