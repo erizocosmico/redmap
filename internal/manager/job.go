@@ -9,6 +9,7 @@ import (
 	"plugin"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/erizocosmico/redmap"
@@ -16,6 +17,8 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
+
+const installTimeout = 1 * time.Minute
 
 // ErrNoWorkersAvailable is returned when there are no more available workers
 // to take a job.
@@ -229,6 +232,7 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 		r.errors <- err
 		return
 	}
+	requiresInstallation := worker.isRunningJobTasks(r.job.id)
 
 	requeue := func(err error) {
 		r.Add(1)
@@ -241,14 +245,16 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 
 	worker.running(r.job.id)
 
-	err = backoff.Retry(func() error {
-		cli, err := worker.client()
-		if err != nil {
-			return err
-		}
+	if requiresInstallation {
+		err = Retry(installTimeout, func() error {
+			cli, err := worker.client()
+			if err != nil {
+				return err
+			}
 
-		return cli.Install(r.job.id, r.plugin)
-	}, backoff.NewExponentialBackOff())
+			return cli.Install(r.job.id, r.plugin)
+		})
+	}
 
 	if err != nil {
 		requeue(err)
