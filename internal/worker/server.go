@@ -67,23 +67,36 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
-	defer l.Close()
-	defer s.conns.Wait()
+	logrus.Infof("listenning for connections at %s", s.addr)
+
+	defer func() {
+		logrus.Infof("shutting down server")
+		s.conns.Wait()
+	}()
+
+	var done = make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		close(done)
+		l.Close()
+	}()
 
 	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-
 		conn, err := l.Accept()
 		if err != nil {
-			return err
+			select {
+			case <-done:
+				return nil
+			default:
+				return err
+			}
 		}
 
+		log := logrus.WithField("addr", conn.RemoteAddr().String())
+		log.Debugf("got a connection")
+
 		s.conns.Add(1)
-		go s.handleConn(ctx, conn)
+		go s.handleConn(ctx, conn, log)
 	}
 }
 
@@ -95,7 +108,7 @@ func (s *Server) decr() {
 	atomic.AddInt32(&s.activeJobs, -1)
 }
 
-func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
+func (s *Server) handleConn(ctx context.Context, conn net.Conn, log *logrus.Entry) {
 	defer conn.Close()
 	defer s.conns.Done()
 
@@ -110,11 +123,16 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 			return
 		}
 
+		log.Debug("got a new request")
+
 		resp, err := s.handleRequest(ctx, conn, req)
 		if err != nil {
+			log.Errorf("request failed: %s", err)
 			s.writeError(conn, err)
 			continue
 		}
+
+		logrus.Debug("request was successful")
 
 		s.writeResponse(conn, &proto.Response{Type: proto.Ok, Data: resp})
 	}

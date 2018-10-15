@@ -4,15 +4,27 @@ github.com/cenkalti/backoff
 github.com/davecgh/go-spew/spew
 # github.com/fatih/pool v3.0.0+incompatible
 github.com/fatih/pool
+# github.com/jessevdk/go-flags v1.4.0
+github.com/jessevdk/go-flags
+# github.com/mattn/go-colorable v0.0.9
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.4
+github.com/mattn/go-isatty
+# github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
+github.com/mgutz/ansi
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/satori/go.uuid v1.2.0
 github.com/satori/go.uuid
 # github.com/sirupsen/logrus v1.0.6
 github.com/sirupsen/logrus
+# github.com/src-d/envconfig v1.0.0
+github.com/src-d/envconfig
 # github.com/stretchr/testify v1.2.2
 github.com/stretchr/testify/require
 github.com/stretchr/testify/assert
+# github.com/x-cray/logrus-prefixed-formatter v0.5.2
+github.com/x-cray/logrus-prefixed-formatter
 # golang.org/x/crypto v0.0.0-20180830192347-182538f80094
 golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20180826012351-8a410e7b638d
@@ -20,3 +32,7 @@ golang.org/x/net/context
 # golang.org/x/sys v0.0.0-20180831094639-fa5fdf94c789
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+# gopkg.in/src-d/go-cli.v0 v0.0.0-20180921125053-af27c1c19175
+gopkg.in/src-d/go-cli.v0
+# gopkg.in/src-d/go-log.v1 v1.0.1
+gopkg.in/src-d/go-log.v1
