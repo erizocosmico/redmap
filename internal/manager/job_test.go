@@ -99,24 +99,14 @@ func compilePlugin(t *testing.T, plugin string) ([]byte, func()) {
 	t.Helper()
 	require := require.New(t)
 
-	// Check if plugin is pre-compiled
 	path := filepath.Join("..", "..", "_testdata", plugin)
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			data, err := ioutil.ReadFile(path)
-			require.NoError(err)
-			return data, func() {}
-		}
-		require.NoError(err)
-	}
-
 	f, err := ioutil.TempFile(os.TempDir(), "redmap-")
 	require.NoError(err)
 
 	dst := f.Name()
 	require.NoError(f.Close())
 
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-i", "-o", dst, path+".go")
+	cmd := exec.Command("go", "build", "-buildmode=plugin", "-i", "-o", dst, path)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))

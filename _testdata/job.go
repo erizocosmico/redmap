@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
+	"io/ioutil"
 	"strconv"
 )
 
@@ -51,17 +51,7 @@ func (job) Reduce(acc, current []byte) ([]byte, error) {
 }
 
 func (job) Done(data []byte) error {
-	f, err := os.OpenFile("result", os.O_CREATE, 0755)
-	if err != nil {
-		return err
-	}
-
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-
-	return f.Close()
+	return ioutil.WriteFile("result", data, 0755)
 }
 
 func (j job) Count() (int32, error) {

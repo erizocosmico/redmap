@@ -29,9 +29,9 @@ func TestWorker(t *testing.T) {
 
 	require.NoError(cli.Install(id, data))
 
-	result, err := cli.ExecMap(id, []byte("foo"))
+	result, err := cli.ExecMap(id, []byte("1"))
 	require.NoError(err)
-	require.Equal([]byte("foo,"), result)
+	require.Equal([]byte("2"), result)
 
 	info, err := cli.Info()
 	require.NoError(err)
@@ -82,24 +82,14 @@ func compilePlugin(t *testing.T) ([]byte, func()) {
 	t.Helper()
 	require := require.New(t)
 
-	// Check if plugin is pre-compiled
-	path := filepath.Join("..", "..", "_testdata", "job")
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			data, err := ioutil.ReadFile(path)
-			require.NoError(err)
-			return data, func() {}
-		}
-		require.NoError(err)
-	}
-
+	path := filepath.Join("..", "..", "_testdata", "job.go")
 	f, err := ioutil.TempFile(os.TempDir(), "redmap-")
 	require.NoError(err)
 
 	dst := f.Name()
 	require.NoError(f.Close())
 
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-i", "-o", dst, path+".go")
+	cmd := exec.Command("go", "build", "-buildmode=plugin", "-i", "-o", dst, path)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
