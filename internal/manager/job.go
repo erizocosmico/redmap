@@ -396,16 +396,16 @@ func (r *jobRunner) produce(ctx context.Context, done chan struct{}) {
 		select {
 		case <-ctx.Done():
 			return
+		case err := <-r.job.loadErrors:
+			if err != nil && r.errors != nil {
+				r.errors <- err
+			}
 		case data, ok := <-r.job.loader:
 			if !ok {
 				return
 			}
 			r.Add(1)
 			r.tasks <- task{data: data}
-		case err := <-r.job.loadErrors:
-			if err != nil && r.errors != nil {
-				r.errors <- err
-			}
 		}
 	}
 }

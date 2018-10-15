@@ -89,7 +89,7 @@ func compilePlugin(t *testing.T) ([]byte, func()) {
 	dst := f.Name()
 	require.NoError(f.Close())
 
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", dst, path)
+	cmd := exec.Command("go", "build", "-buildmode=plugin", "-i", "-o", dst, path)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))

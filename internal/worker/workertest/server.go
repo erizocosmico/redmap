@@ -154,6 +154,6 @@ func (s *Server) writeError(conn net.Conn, err error) {
 
 func (s *Server) writeResponse(conn net.Conn, r *proto.Response) {
 	if err := proto.WriteResponse(r, conn); err != nil {
-		logrus.WithField("err", err).Error("unable to write response")
+		logrus.WithField("err", err).Error("unable to write response from test server")
 	}
 }

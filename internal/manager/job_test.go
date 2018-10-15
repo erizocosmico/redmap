@@ -67,7 +67,7 @@ func TestJobManagerReduceError(t *testing.T) {
 	defer cleanup()
 
 	wp := newWorkerPool()
-	w := newWorker("0.0.0.0:9876", nil)
+	w := newWorker("0.0.0.0:9877", nil)
 	wp.add(w)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -106,7 +106,7 @@ func compilePlugin(t *testing.T, plugin string) ([]byte, func()) {
 	dst := f.Name()
 	require.NoError(f.Close())
 
-	cmd := exec.Command("go", "build", "-buildmode=plugin", "-o", dst, path)
+	cmd := exec.Command("go", "build", "-buildmode=plugin", "-i", "-o", dst, path)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
