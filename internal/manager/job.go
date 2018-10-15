@@ -27,6 +27,7 @@ type jobManager struct {
 	workers    *workerPool
 	maxRetries int
 	async      bool
+	tokens     chan struct{}
 }
 
 func newJobManager(
@@ -35,12 +36,17 @@ func newJobManager(
 	maxRetries int,
 	async bool,
 ) *jobManager {
+	// TODO(erizocosmico): make this configurable
+	var tokens = make(chan struct{}, 1)
+	tokens <- struct{}{}
+
 	return &jobManager{
 		jobs:       make(map[uuid.UUID]*job),
 		workers:    wp,
 		maxRetries: maxRetries,
 		ctx:        ctx,
 		async:      async,
+		tokens:     tokens,
 	}
 }
 
@@ -88,6 +94,11 @@ func (jm *jobManager) run(data *proto.JobData) error {
 
 	// Run the job asynchronously.
 	run := func() error {
+		// Generate a new token once the job has been fully processed.
+		defer func() {
+			jm.tokens <- struct{}{}
+		}()
+
 		r := newJobRunner(jm.ctx, j, jm.workers, data.Plugin, jm.maxRetries)
 		r.run()
 
@@ -102,6 +113,10 @@ func (jm *jobManager) run(data *proto.JobData) error {
 
 		return nil
 	}
+
+	// Wait until a slot is available so that we can limit the number of jobs
+	// running concurrently.
+	<-jm.tokens
 
 	if !jm.async {
 		return run()
@@ -202,23 +217,51 @@ func newJobRunner(
 }
 
 func (r *jobRunner) run() {
-	go r.produce()
-
 	ctx, cancel := context.WithCancel(r.ctx)
+	var done = make(chan struct{})
+	var errorsDone = make(chan struct{})
+	var tasksDone = make(chan struct{})
+	go r.produce(ctx, done)
 
 	go func() {
+		defer func() {
+			close(errorsDone)
+		}()
+
 		for {
 			select {
-			case <-r.ctx.Done():
+			case <-ctx.Done():
+				return
+			case err, ok := <-r.errors:
+				if !ok {
+					return
+				}
+
+				r.job.failedTask(err)
+
+				if err == ErrNoWorkersAvailable {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		defer func() {
+			close(tasksDone)
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
 				r.job.cancel()
-				cancel()
 				return
 			case task, ok := <-r.tasks:
 				if !ok {
 					// TODO(erizocosmico): set job as finished
 					r.job.cancel()
-					cancel()
-					break
+					return
 				}
 
 				if task.retries > r.maxRetries {
@@ -226,24 +269,22 @@ func (r *jobRunner) run() {
 				} else {
 					go r.executeTask(ctx, task)
 				}
-			case err, ok := <-r.errors:
-				if ok {
-					r.job.failedTask(err)
-
-					if err == ErrNoWorkersAvailable {
-						r.job.cancel()
-						cancel()
-						return
-					}
-				} else {
-					return
-				}
 			}
 		}
 	}()
 
+	// Once all tasks are loaded, we wait for them to be completed.
+	<-done
 	r.Wait()
+	cancel()
+
 	close(r.errors)
+	close(r.tasks)
+
+	// Make sure we wait for all the tasks and errors to be completed before
+	// we exit.
+	<-errorsDone
+	<-tasksDone
 }
 
 type task struct {
@@ -343,28 +384,28 @@ func (r *jobRunner) pickWorker(job uuid.UUID) (*worker, error) {
 	return nil, ErrNoWorkersAvailable
 }
 
-func (r *jobRunner) produce() {
-	cleanup := func() {
+func (r *jobRunner) produce(ctx context.Context, done chan struct{}) {
+	defer func() {
+		close(done)
 		r.job.cancel()
-		close(r.tasks)
 		r.job.loadErrors = nil
 		r.job.loader = nil
-	}
+	}()
 
 	for {
 		select {
-		case <-r.ctx.Done():
-			cleanup()
+		case <-ctx.Done():
 			return
 		case data, ok := <-r.job.loader:
 			if !ok {
-				cleanup()
 				return
 			}
 			r.Add(1)
 			r.tasks <- task{data: data}
 		case err := <-r.job.loadErrors:
-			r.errors <- err
+			if err != nil && r.errors != nil {
+				r.errors <- err
+			}
 		}
 	}
 }

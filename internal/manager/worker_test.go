@@ -106,7 +106,7 @@ func TestWorker(t *testing.T) {
 		},
 		installed,
 	)
-	require.Len(worker.installed, 1)
+	require.Len(worker.installed, 0)
 	worker.close()
 
 	require.NoError(worker.checkAvailability(50 * time.Millisecond))
@@ -115,7 +115,6 @@ func TestWorker(t *testing.T) {
 	require.True(terminated)
 	require.True(uninstalled[id1])
 	require.True(uninstalled[id2])
-	require.Len(worker.installed, 0)
 
 	require.Equal(workerTerminated, worker.state)
 }

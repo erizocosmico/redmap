@@ -2,10 +2,12 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -17,8 +19,11 @@ import (
 
 func TestJobManager(t *testing.T) {
 	require := require.New(t)
-	plugin, cleanup := compilePlugin(t)
+	plugin, cleanup := compilePlugin(t, "job.go")
 	defer cleanup()
+	defer func() {
+		_ = os.Remove("result")
+	}()
 
 	wp := newWorkerPool()
 	w := newWorker("0.0.0.0:9876", nil)
@@ -33,7 +38,11 @@ func TestJobManager(t *testing.T) {
 	server := workertest.NewServer(w.addr, workertest.Hooks{
 		OnExecMap: func(id uuid.UUID, data []byte) ([]byte, error) {
 			atomic.AddInt32(&maps, 1)
-			return data, nil
+			n, err := strconv.Atoi(string(data))
+			if err != nil {
+				return nil, err
+			}
+			return []byte(fmt.Sprint(n + 1)), nil
 		},
 	})
 
@@ -49,16 +58,48 @@ func TestJobManager(t *testing.T) {
 
 	content, err := ioutil.ReadFile("result")
 	require.NoError(err)
-	require.Equal("7", string(content))
-
-	_ = os.Remove("result")
+	require.Equal("6", string(content))
 }
 
-func compilePlugin(t *testing.T) ([]byte, func()) {
+func TestJobManagerReduceError(t *testing.T) {
+	require := require.New(t)
+	plugin, cleanup := compilePlugin(t, "reduce_error.go")
+	defer cleanup()
+
+	wp := newWorkerPool()
+	w := newWorker("0.0.0.0:9876", nil)
+	wp.add(w)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	j := newJobManager(ctx, wp, 2, false)
+
+	var id uuid.UUID
+	server := workertest.NewServer(w.addr, workertest.Hooks{
+		OnExecMap: func(i uuid.UUID, data []byte) ([]byte, error) {
+			id = i
+			return data, nil
+		},
+	})
+
+	go server.Start(ctx)
+
+	require.NoError(j.run(&proto.JobData{
+		ID:     uuid.NewV4(),
+		Name:   "test",
+		Plugin: plugin,
+	}))
+
+	require.NotNil(j.jobs[id])
+	require.Len(j.jobs[id].errors, 4)
+}
+
+func compilePlugin(t *testing.T, plugin string) ([]byte, func()) {
 	t.Helper()
 	require := require.New(t)
 
-	path := filepath.Join("..", "..", "_testdata", "job.go")
+	path := filepath.Join("..", "..", "_testdata", plugin)
 	f, err := ioutil.TempFile(os.TempDir(), "redmap-")
 	require.NoError(err)
 
