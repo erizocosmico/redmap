@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -115,7 +114,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn, log *logrus.Entr
 	for {
 		req, err := proto.ParseRequest(conn, s.maxSize)
 		if err != nil {
-			if err == io.EOF {
+			if proto.IsEOF(err) {
 				break
 			}
 
@@ -159,16 +158,22 @@ func (s *Server) handleRequest(
 			return nil, err
 		}
 
+		logrus.WithField("id", r.ID).Info("plugin for job was installed")
+
 		return nil, nil
 	case proto.Uninstall:
 		if err := s.jobs.uninstall(r.ID); err != nil {
 			return nil, err
 		}
 
+		logrus.WithField("id", r.ID).Info("plugin for job was uninstalled")
+
 		return nil, nil
 	case proto.ExecMap:
 		s.incr()
 		defer s.decr()
+
+		logrus.WithField("id", r.ID).Info("executing map for job")
 
 		j, ok := s.jobs.get(r.ID)
 		if !ok {

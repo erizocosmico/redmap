@@ -70,12 +70,20 @@ func (jm *jobManager) allocate(id uuid.UUID) error {
 }
 
 func (jm *jobManager) run(data *proto.JobData) error {
+	log := logrus.WithFields(logrus.Fields{
+		"id":   data.ID,
+		"name": data.Name,
+	})
+	log.Info("allocating job")
 	if err := jm.allocate(data.ID); err != nil {
 		return err
 	}
 
+	log.Info("installing job plugin")
+
 	j, err := jm.install(data)
 	if err != nil {
+		log.Error("install was not successful")
 		j = &job{
 			id:     data.ID,
 			name:   data.Name,
@@ -99,15 +107,18 @@ func (jm *jobManager) run(data *proto.JobData) error {
 			jm.tokens <- struct{}{}
 		}()
 
-		r := newJobRunner(jm.ctx, j, jm.workers, data.Plugin, jm.maxRetries)
-		r.run()
+		newJobRunner(
+			jm.ctx,
+			log,
+			j,
+			jm.workers,
+			data.Plugin,
+			jm.maxRetries,
+		).run()
 
 		if err := j.Done(j.accumulator); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"job":  data.ID,
-				"name": data.Name,
-				"err":  err,
-			}).Error("error occurred calling job Done hook")
+			log.WithField("err", err).
+				Error("error occurred calling job Done hook")
 			return err
 		}
 
@@ -144,6 +155,7 @@ func (jm *jobManager) install(data *proto.JobData) (*job, error) {
 		return nil, fmt.Errorf("unable to close plugin file %s: %s", f.Name(), err)
 	}
 
+	// TODO(erizocosmico): ensure plugin has not been loaded already.
 	p, err := plugin.Open(f.Name())
 	if err != nil {
 		return nil, fmt.Errorf("unable to open plugin %s: %s", data.ID, err)
@@ -190,6 +202,7 @@ func (jm *jobManager) install(data *proto.JobData) (*job, error) {
 type jobRunner struct {
 	sync.WaitGroup
 	ctx        context.Context
+	log        *logrus.Entry
 	job        *job
 	workers    *workerPool
 	tasks      chan task
@@ -200,6 +213,7 @@ type jobRunner struct {
 
 func newJobRunner(
 	ctx context.Context,
+	log *logrus.Entry,
 	job *job,
 	workers *workerPool,
 	plugin []byte,
@@ -207,6 +221,7 @@ func newJobRunner(
 ) *jobRunner {
 	return &jobRunner{
 		ctx:        ctx,
+		log:        log,
 		job:        job,
 		workers:    workers,
 		tasks:      make(chan task),
@@ -240,9 +255,12 @@ func (r *jobRunner) run() {
 				r.job.failedTask(err)
 
 				if err == ErrNoWorkersAvailable {
+					r.log.Error("no workers available, cancelling job")
 					cancel()
 					return
 				}
+
+				r.log.WithField("err", err).Error("failed task")
 			}
 		}
 	}()
@@ -296,12 +314,16 @@ type task struct {
 func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	defer r.Done()
 
+	r.log.Info("executing task")
+
 	r.job.runningTask()
 	worker, err := r.pickWorker(r.job.id)
 	if err != nil {
 		r.errors <- err
 		return
 	}
+
+	r.log.WithField("worker", worker.addr).Info("worker was picked")
 
 	// We need to wait until the job is installed on the worker.
 	// TODO(erizocosmico): handle installation problems so we don't
@@ -312,6 +334,8 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	worker.addJob(r.job.id)
 
 	requeue := func(err error) {
+		r.log.WithField("err", err).
+			Error("task failed, so it will be requeued")
 		r.Add(1)
 		task.retries++
 		task.lastError = err
@@ -323,6 +347,7 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	worker.running(r.job.id)
 
 	if requiresInstallation {
+		r.log.Info("worker requires installation, installing")
 		err := worker.install(r.job.id, r.plugin)
 		if err != nil {
 			requeue(err)
@@ -345,11 +370,14 @@ func (r *jobRunner) executeTask(ctx context.Context, task task) {
 	}
 
 	worker.processed(r.job.id)
+	r.log.Info("map executed correctly")
 
 	if err := r.job.reduce(result); err != nil {
 		r.errors <- err
 		return
 	}
+
+	r.log.Info("reduce executed correctly")
 
 	r.job.processedTask()
 }

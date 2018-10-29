@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -100,8 +99,13 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
-	defer l.Close()
-	defer s.conns.Wait()
+	logrus.Infof("listenning for connections at %s", s.addr)
+
+	defer func() {
+		logrus.Infof("shutting down server")
+		l.Close()
+		s.conns.Wait()
+	}()
 
 	for {
 		select {
@@ -116,6 +120,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 
 		s.conns.Add(1)
+		logrus.Debug("received new connection")
 		go s.handleConn(ctx, conn)
 	}
 }
@@ -127,7 +132,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	for {
 		req, err := proto.ParseRequest(conn, s.maxSize)
 		if err != nil {
-			if err == io.EOF {
+			if proto.IsEOF(err) {
 				break
 			}
 
@@ -156,6 +161,11 @@ func (s *Server) handleRequest(
 		if err != nil {
 			return nil, err
 		}
+
+		logrus.WithFields(logrus.Fields{
+			"id":   data.ID,
+			"name": data.Name,
+		}).Info("got new job")
 
 		return nil, s.jobs.run(data)
 	case proto.Hello:
@@ -202,6 +212,7 @@ func (s *Server) attachWorker(addr string) error {
 	}
 
 	s.workers.add(w)
+	logrus.Infof("worker %s attached", w.addr)
 	return nil
 }
 
@@ -221,6 +232,7 @@ func (s *Server) detachWorker(addr string) error {
 
 	w.awaitTermination(func() {
 		s.workers.remove(w)
+		logrus.Infof("worker %s was detached", w.addr)
 	})
 	return nil
 }

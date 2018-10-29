@@ -72,12 +72,12 @@ func (r *Request) WorkerData() (*WorkerData, error) {
 func ParseRequest(r io.Reader, maxSize uint32) (*Request, error) {
 	n, err := bin.ReadUint16(r)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read op: %s", err)
+		return nil, NewErr(err, "unable to read op: %s", err)
 	}
 
 	op := Op(n)
 	if op == Invalid || op >= lastOp {
-		return nil, fmt.Errorf("invalid op %d: %s", op, err)
+		return nil, NewErr(err, "invalid op %d: %s", op, err)
 	}
 
 	var data []byte
@@ -85,7 +85,7 @@ func ParseRequest(r io.Reader, maxSize uint32) (*Request, error) {
 	case RunJob, Attach, Detach:
 		sz, err := bin.ReadUint32(r)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read data size: %s", err)
+			return nil, NewErr(err, "unable to read data size: %s", err)
 		}
 
 		if sz > maxSize {
@@ -94,7 +94,7 @@ func ParseRequest(r io.Reader, maxSize uint32) (*Request, error) {
 
 		data = make([]byte, int(sz))
 		if _, err := io.ReadFull(r, data); err != nil {
-			return nil, fmt.Errorf("can't read data: %s", err)
+			return nil, NewErr(err, "can't read data: %s", err)
 		}
 	}
 
@@ -108,13 +108,13 @@ func WriteRequest(r *Request, w io.Writer) error {
 	}
 
 	if err := bin.WriteUint16(w, uint16(r.Op)); err != nil {
-		return fmt.Errorf("unable to write op: %s", err)
+		return NewErr(err, "unable to write op: %s", err)
 	}
 
 	switch r.Op {
 	case RunJob, Attach, Detach:
 		if err := bin.WriteBytes(w, r.Data); err != nil {
-			return fmt.Errorf("can't write data: %s", err)
+			return NewErr(err, "can't write data: %s", err)
 		}
 	}
 

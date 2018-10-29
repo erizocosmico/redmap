@@ -74,7 +74,7 @@ func ParseRequest(r io.Reader, maxSize int32) (*Request, error) {
 
 		data = make([]byte, int(size))
 		if _, err := io.ReadFull(r, data); err != nil {
-			return nil, fmt.Errorf("proto: can't read request data: %s", err)
+			return nil, NewErr(err, "proto: can't read request data: %s", err)
 		}
 	case Uninstall:
 		id, err = readID(r)
@@ -93,7 +93,7 @@ func ParseRequest(r io.Reader, maxSize int32) (*Request, error) {
 func readOp(r io.Reader) (Op, error) {
 	n, err := bin.ReadUint16(r)
 	if err != nil {
-		return Invalid, fmt.Errorf("proto: can't read op: %s", err)
+		return Invalid, NewErr(err, "proto: can't read op: %s", err)
 	}
 
 	o := Op(n)
