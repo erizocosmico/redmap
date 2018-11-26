@@ -37,8 +37,9 @@ func TestStatsRoundtrip(t *testing.T) {
 	stats.Jobs.Failed = 2
 	stats.Jobs.Running = 3
 	stats.Workers.Total = 4
-	stats.Workers.Running = 4
-	stats.Workers.Failing = 4
+	stats.Workers.Active = 5
+	stats.Workers.Terminated = 6
+	stats.Workers.Failing = 7
 
 	data, err := stats.Encode()
 	require.NoError(err)

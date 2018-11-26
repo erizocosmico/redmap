@@ -171,7 +171,7 @@ func (s *Server) handleRequest(
 	case proto.Hello:
 		return s.hello()
 	case proto.Stats:
-		return nil, ErrNotImplemented
+		return s.stats()
 	case proto.Attach:
 		data, err := req.WorkerData()
 		if err != nil {
@@ -235,6 +235,30 @@ func (s *Server) detachWorker(addr string) error {
 		logrus.Infof("worker %s was detached", w.addr)
 	})
 	return nil
+}
+
+func (s *Server) stats() ([]byte, error) {
+	var stats Stats
+
+	var workers = s.workers.all()
+	stats.Workers.Total = uint32(len(workers))
+
+	for _, w := range workers {
+		switch w.state {
+		case workerFailing:
+			stats.Workers.Failing++
+		case workerTerminated:
+			stats.Workers.Terminated++
+		default:
+			stats.Workers.Active++
+		}
+	}
+
+	stats.Jobs.Completed = s.jobs.completed
+	stats.Jobs.Failed = s.jobs.failed
+	stats.Jobs.Running = s.jobs.running
+
+	return stats.Encode()
 }
 
 func (s *Server) writeError(conn net.Conn, err error) {
