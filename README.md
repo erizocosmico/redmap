@@ -317,8 +317,6 @@ You can specify as many worker server addresses as you need.
 - `--write-timeout` maximum time to wait for write operations before aborting (default: 10s)
 - `--read-timeout` maximum time to wait for read operations before aborting (default: 10s)
 
-**WARNING:** Unfortunately, this command is still not implemented.
-
 ### Roadmap
 
 - [x] Worker proto

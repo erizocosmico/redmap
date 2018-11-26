@@ -28,6 +28,9 @@ type jobManager struct {
 	maxRetries int
 	async      bool
 	tokens     chan struct{}
+	completed  uint32
+	running    uint32
+	failed     uint32
 }
 
 func newJobManager(
@@ -102,6 +105,9 @@ func (jm *jobManager) run(data *proto.JobData) error {
 
 	// Run the job asynchronously.
 	run := func() error {
+		jm.incrMetric(&jm.running)
+		defer jm.decrMetric(&jm.running)
+
 		// Generate a new token once the job has been fully processed.
 		defer func() {
 			jm.tokens <- struct{}{}
@@ -119,7 +125,14 @@ func (jm *jobManager) run(data *proto.JobData) error {
 		if err := j.Done(j.accumulator); err != nil {
 			log.WithField("err", err).
 				Error("error occurred calling job Done hook")
+			jm.incrMetric(&jm.failed)
 			return err
+		}
+
+		if j.processed > 0 {
+			jm.incrMetric(&jm.completed)
+		} else {
+			jm.incrMetric(&jm.failed)
 		}
 
 		return nil
@@ -197,6 +210,18 @@ func (jm *jobManager) install(data *proto.JobData) (*job, error) {
 		pluginPath: f.Name(),
 		total:      total,
 	}, nil
+}
+
+func (jm *jobManager) incrMetric(metric *uint32) {
+	jm.mut.Lock()
+	*metric++
+	jm.mut.Unlock()
+}
+
+func (jm *jobManager) decrMetric(metric *uint32) {
+	jm.mut.Lock()
+	*metric--
+	jm.mut.Unlock()
 }
 
 type jobRunner struct {

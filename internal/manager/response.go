@@ -83,9 +83,10 @@ func (i Info) Encode() ([]byte, error) {
 // Stats about running jobs.
 type Stats struct {
 	Workers struct {
-		Running uint32
-		Failing uint32
-		Total   uint32
+		Active     uint32
+		Terminated uint32
+		Failing    uint32
+		Total      uint32
 	}
 
 	Jobs struct {
@@ -98,7 +99,8 @@ type Stats struct {
 // Decode stats from bytes.
 func (s *Stats) Decode(data []byte) error {
 	var ptrs = []*uint32{
-		&s.Workers.Running,
+		&s.Workers.Active,
+		&s.Workers.Terminated,
 		&s.Workers.Failing,
 		&s.Workers.Total,
 		&s.Jobs.Completed,
@@ -122,7 +124,8 @@ func (s *Stats) Decode(data []byte) error {
 // Encode stats to bytes.
 func (s Stats) Encode() ([]byte, error) {
 	var data = []uint32{
-		s.Workers.Running,
+		s.Workers.Active,
+		s.Workers.Terminated,
 		s.Workers.Failing,
 		s.Workers.Total,
 		s.Jobs.Completed,

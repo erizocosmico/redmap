@@ -166,7 +166,8 @@ func (c *managerStatsCmd) ExecuteContext(ctx context.Context, args []string) err
 	w := tablewriter.NewWriter(os.Stdout)
 
 	w.Append([]string{"ADDRESS", args[0]})
-	w.Append([]string{"RUNNING WORKERS", fmt.Sprint(stats.Workers.Running)})
+	w.Append([]string{"ACTIVE WORKERS", fmt.Sprint(stats.Workers.Active)})
+	w.Append([]string{"TERMINATED WORKERS", fmt.Sprint(stats.Workers.Terminated)})
 	w.Append([]string{"FAILING WORKERS", fmt.Sprint(stats.Workers.Failing)})
 	w.Append([]string{"TOTAL WORKERS", fmt.Sprint(stats.Workers.Total)})
 	w.Append([]string{"RUNNING JOBS", fmt.Sprint(stats.Jobs.Running)})
