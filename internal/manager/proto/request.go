@@ -29,6 +29,8 @@ const (
 	Attach
 	// Detach a worker from the manager.
 	Detach
+	// Jobs on a manager.
+	Jobs
 	lastOp
 )
 

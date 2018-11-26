@@ -2,6 +2,7 @@ package manager
 
 import (
 	"bytes"
+	"io"
 
 	"github.com/erizocosmico/redmap/internal/bin"
 )
@@ -141,4 +142,106 @@ func (s Stats) Encode() ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// Jobs is a list of job data.
+type Jobs []Job
+
+// Encode jobs to bytes.
+func (j Jobs) Encode() ([]byte, error) {
+	var buf = bytes.NewBuffer(nil)
+	if err := bin.WriteUint32(buf, uint32(len(j))); err != nil {
+		return nil, err
+	}
+
+	for _, job := range j {
+		data, err := job.Encode()
+		if err != nil {
+			return nil, err
+		}
+
+		_, _ = buf.Write(data)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// Decode jobs from bytes.
+func (j *Jobs) Decode(data []byte) error {
+	r := bytes.NewBuffer(data)
+	n, err := bin.ReadUint32(r)
+	if err != nil {
+		return err
+	}
+
+	jobs := make(Jobs, int(n))
+
+	for i := 0; i < int(n); i++ {
+		var job Job
+		if err := job.Decode(r); err != nil {
+			return err
+		}
+		jobs[i] = job
+	}
+
+	*j = jobs
+	return nil
+}
+
+// JobStatus is the status of a job.
+type JobStatus string
+
+const (
+	// JobWaiting means the job is waiting to be run.
+	JobWaiting JobStatus = "waiting"
+	// JobRunning means the job is running.
+	JobRunning JobStatus = "running"
+	// JobDone means the job is finished, either successfully or errored.
+	JobDone JobStatus = "done"
+)
+
+// Job contains basic data about a job.
+type Job struct {
+	ID     string
+	Name   string
+	Status JobStatus
+}
+
+// Encode job data to bytes.
+func (j *Job) Encode() ([]byte, error) {
+	var buf = bytes.NewBuffer(nil)
+	if err := bin.WriteString(buf, j.ID); err != nil {
+		return nil, err
+	}
+
+	if err := bin.WriteString(buf, j.Name); err != nil {
+		return nil, err
+	}
+
+	if err := bin.WriteString(buf, string(j.Status)); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// Decode job data from a reader.
+func (j *Job) Decode(r io.Reader) error {
+	var err error
+
+	if j.ID, err = bin.ReadString(r); err != nil {
+		return err
+	}
+
+	if j.Name, err = bin.ReadString(r); err != nil {
+		return err
+	}
+
+	status, err := bin.ReadString(r)
+	if err != nil {
+		return err
+	}
+
+	j.Status = JobStatus(status)
+	return nil
 }

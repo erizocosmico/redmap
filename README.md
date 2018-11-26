@@ -13,6 +13,7 @@ Experimental distributed golang map-reduce jobs using Go plugins.
   - [Run](#run)
   - [Workers](#workers)
   - [Manager](#manager)
+  - [Jobs](#jobs)
 - [LICENSE](#license)
 
 ### Install
@@ -312,6 +313,22 @@ redmap manager stats <manager address>
 ```
 
 You can specify as many worker server addresses as you need.
+
+**Flags:**
+- `--write-timeout` maximum time to wait for write operations before aborting (default: 10s)
+- `--read-timeout` maximum time to wait for read operations before aborting (default: 10s)
+
+### Jobs
+
+These are all commands available for managing jobs using the redmap CLI.
+
+#### List
+
+You can list all jobs in a manager node with the following command:
+
+```bash
+redmap jobs list <manager address>
+```
 
 **Flags:**
 - `--write-timeout` maximum time to wait for write operations before aborting (default: 10s)
