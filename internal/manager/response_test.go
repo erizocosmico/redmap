@@ -49,3 +49,33 @@ func TestStatsRoundtrip(t *testing.T) {
 
 	require.Equal(stats, result)
 }
+
+func TestJobsRoundtrip(t *testing.T) {
+	require := require.New(t)
+
+	jobs := Jobs{
+		Job{
+			ID:     "1",
+			Name:   "name1",
+			Status: JobDone,
+		},
+		Job{
+			ID:     "2",
+			Name:   "name2",
+			Status: JobWaiting,
+		},
+		Job{
+			ID:     "3",
+			Name:   "name3",
+			Status: JobRunning,
+		},
+	}
+
+	data, err := jobs.Encode()
+	require.NoError(err)
+
+	var result Jobs
+	require.NoError(result.Decode(data))
+
+	require.Equal(jobs, result)
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -187,6 +189,8 @@ func (s *Server) handleRequest(
 		}
 
 		return nil, s.detachWorker(data.Addr)
+	case proto.Jobs:
+		return s.jobList()
 	default:
 		return nil, fmt.Errorf("invalid request op: %d", req.Op)
 	}
@@ -259,6 +263,34 @@ func (s *Server) stats() ([]byte, error) {
 	stats.Jobs.Running = s.jobs.running
 
 	return stats.Encode()
+}
+
+func (s *Server) jobList() ([]byte, error) {
+	var jobs Jobs
+	s.jobs.mut.RLock()
+	for _, j := range s.jobs.jobs {
+		var status = JobWaiting
+		j.mut.RLock()
+		if j.running > 0 {
+			status = JobRunning
+		} else if j.failed > 0 || j.processed > 0 {
+			status = JobDone
+		}
+		j.mut.RUnlock()
+
+		jobs = append(jobs, Job{
+			ID:     j.id.String(),
+			Name:   j.name,
+			Status: status,
+		})
+	}
+	s.jobs.mut.RUnlock()
+
+	sort.Slice(jobs, func(i, j int) bool {
+		return strings.Compare(jobs[i].ID, jobs[j].ID) < 0
+	})
+
+	return jobs.Encode()
 }
 
 func (s *Server) writeError(conn net.Conn, err error) {

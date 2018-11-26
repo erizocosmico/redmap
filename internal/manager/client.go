@@ -175,3 +175,20 @@ func (c *Client) Detach(addr string) error {
 	})
 	return err
 }
+
+// Jobs returns a list of jobs in the manager.
+func (c *Client) Jobs() (Jobs, error) {
+	resp, err := c.request(&proto.Request{
+		Op: proto.Jobs,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var jobs Jobs
+	if err := jobs.Decode(resp); err != nil {
+		return nil, err
+	}
+
+	return jobs, nil
+}
