@@ -18,6 +18,10 @@ func TestRequestRoundtrip(t *testing.T) {
 		{"hello", &Request{Op: Hello}, false, false},
 		{"stats", &Request{Op: Stats}, false, false},
 		{"jobs", &Request{Op: Jobs}, false, false},
+		{"jobstats", &Request{
+			Op:   JobStats,
+			Data: []byte{1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
+		}, false, false},
 		{"runjob", &Request{Op: RunJob, Data: []byte{1, 2, 3, 4}}, false, false},
 		{"attach", &Request{Op: Attach, Data: []byte{1, 2, 3, 4}}, false, false},
 		{"detach", &Request{Op: Detach, Data: []byte{1, 2, 3, 4}}, false, false},

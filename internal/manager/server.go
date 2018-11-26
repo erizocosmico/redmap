@@ -11,6 +11,7 @@ import (
 
 	"github.com/erizocosmico/redmap/internal/manager/proto"
 	workerlib "github.com/erizocosmico/redmap/internal/worker"
+	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -191,6 +192,10 @@ func (s *Server) handleRequest(
 		return nil, s.detachWorker(data.Addr)
 	case proto.Jobs:
 		return s.jobList()
+	case proto.JobStats:
+		var id uuid.UUID
+		copy(id[:], req.Data)
+		return s.jobStats(id)
 	default:
 		return nil, fmt.Errorf("invalid request op: %d", req.Op)
 	}
@@ -269,19 +274,14 @@ func (s *Server) jobList() ([]byte, error) {
 	var jobs Jobs
 	s.jobs.mut.RLock()
 	for _, j := range s.jobs.jobs {
-		var status = JobWaiting
 		j.mut.RLock()
-		if j.running > 0 {
-			status = JobRunning
-		} else if j.failed > 0 || j.processed > 0 {
-			status = JobDone
-		}
+		state := j.state
 		j.mut.RUnlock()
 
 		jobs = append(jobs, Job{
 			ID:     j.id.String(),
 			Name:   j.name,
-			Status: status,
+			Status: state.String(),
 		})
 	}
 	s.jobs.mut.RUnlock()
@@ -291,6 +291,34 @@ func (s *Server) jobList() ([]byte, error) {
 	})
 
 	return jobs.Encode()
+}
+
+func (s *Server) jobStats(id uuid.UUID) ([]byte, error) {
+	s.jobs.mut.RLock()
+	job := s.jobs.jobs[id]
+	s.jobs.mut.RUnlock()
+
+	if job == nil {
+		return nil, fmt.Errorf("job not found in server: %s", id)
+	}
+
+	job.mut.RLock()
+	defer job.mut.RUnlock()
+
+	stats := &JobStats{
+		ID:              job.id.String(),
+		Name:            job.name,
+		Status:          job.state.String(),
+		Errors:          uint32(len(job.errors)),
+		AccumulatorSize: uint32(len(job.accumulator)),
+	}
+
+	stats.Tasks.Processed = uint32(job.processed)
+	stats.Tasks.Failed = uint32(job.failed)
+	stats.Tasks.Running = uint32(job.running)
+	stats.Tasks.Total = uint32(job.total)
+
+	return stats.Encode()
 }
 
 func (s *Server) writeError(conn net.Conn, err error) {
