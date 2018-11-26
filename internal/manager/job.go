@@ -472,6 +472,21 @@ const (
 	jobFinished
 )
 
+func (s jobState) String() string {
+	switch s {
+	case jobWaiting:
+		return "waiting"
+	case jobErrored:
+		return "errored"
+	case jobRunning:
+		return "running"
+	case jobFinished:
+		return "finished"
+	default:
+		panic(fmt.Errorf("invalid job state: %s", s.String()))
+	}
+}
+
 type job struct {
 	redmap.Job
 	id         uuid.UUID

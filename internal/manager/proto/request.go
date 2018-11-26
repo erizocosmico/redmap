@@ -31,6 +31,8 @@ const (
 	Detach
 	// Jobs on a manager.
 	Jobs
+	// JobStats returns a series of useful statistics about a job.
+	JobStats
 	lastOp
 )
 
@@ -98,6 +100,20 @@ func ParseRequest(r io.Reader, maxSize uint32) (*Request, error) {
 		if _, err := io.ReadFull(r, data); err != nil {
 			return nil, NewErr(err, "can't read data: %s", err)
 		}
+	case JobStats:
+		sz, err := bin.ReadUint32(r)
+		if err != nil {
+			return nil, NewErr(err, "unable to read data size: %s", err)
+		}
+
+		if sz != 16 {
+			return nil, fmt.Errorf("data is not a valid job id")
+		}
+
+		data = make([]byte, 16)
+		if _, err := io.ReadFull(r, data); err != nil {
+			return nil, NewErr(err, "can't read job id: %s", err)
+		}
 	}
 
 	return &Request{Op: op, Data: data}, nil
@@ -114,7 +130,7 @@ func WriteRequest(r *Request, w io.Writer) error {
 	}
 
 	switch r.Op {
-	case RunJob, Attach, Detach:
+	case RunJob, Attach, Detach, JobStats:
 		if err := bin.WriteBytes(w, r.Data); err != nil {
 			return NewErr(err, "can't write data: %s", err)
 		}

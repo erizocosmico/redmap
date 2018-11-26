@@ -1,11 +1,14 @@
 package manager
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
 	"net"
 	"time"
+
+	"github.com/erizocosmico/redmap/internal/bin"
 
 	"github.com/erizocosmico/redmap/internal/manager/proto"
 	"github.com/satori/go.uuid"
@@ -191,4 +194,29 @@ func (c *Client) Jobs() (Jobs, error) {
 	}
 
 	return jobs, nil
+}
+
+// JobStats returns the stats for the given job.
+func (c *Client) JobStats(id uuid.UUID) (*JobStats, error) {
+	buf := bytes.NewBuffer(nil)
+	if err := bin.WriteUint32(buf, 16); err != nil {
+		return nil, err
+	}
+
+	_, _ = buf.Write(id[:])
+
+	resp, err := c.request(&proto.Request{
+		Op:   proto.Jobs,
+		Data: buf.Bytes(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var stats JobStats
+	if err := stats.Decode(resp); err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
 }

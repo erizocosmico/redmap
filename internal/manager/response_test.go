@@ -57,17 +57,17 @@ func TestJobsRoundtrip(t *testing.T) {
 		Job{
 			ID:     "1",
 			Name:   "name1",
-			Status: JobDone,
+			Status: "done",
 		},
 		Job{
 			ID:     "2",
 			Name:   "name2",
-			Status: JobWaiting,
+			Status: "waiting",
 		},
 		Job{
 			ID:     "3",
 			Name:   "name3",
-			Status: JobRunning,
+			Status: "running",
 		},
 	}
 
@@ -78,4 +78,29 @@ func TestJobsRoundtrip(t *testing.T) {
 	require.NoError(result.Decode(data))
 
 	require.Equal(jobs, result)
+}
+
+func TestJobStatsRoundtrip(t *testing.T) {
+	require := require.New(t)
+
+	stats := &JobStats{
+		ID:              "id",
+		Name:            "name",
+		Errors:          1,
+		AccumulatorSize: 2,
+		Status:          "foo",
+	}
+
+	stats.Tasks.Failed = 3
+	stats.Tasks.Processed = 4
+	stats.Tasks.Total = 5
+	stats.Tasks.Running = 6
+
+	data, err := stats.Encode()
+	require.NoError(err)
+
+	var result JobStats
+	require.NoError(result.Decode(data))
+
+	require.Equal(stats, &result)
 }

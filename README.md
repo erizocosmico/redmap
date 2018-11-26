@@ -334,6 +334,19 @@ redmap jobs list <manager address>
 - `--write-timeout` maximum time to wait for write operations before aborting (default: 10s)
 - `--read-timeout` maximum time to wait for read operations before aborting (default: 10s)
 
+#### Stats
+
+You can get stats about a job with the following command:
+
+```bash
+redmap jobs stats -m <manager address> <job id>
+```
+
+**Flags:**
+- `-m`, `--manager` address of the manager node
+- `--write-timeout` maximum time to wait for write operations before aborting (default: 10s)
+- `--read-timeout` maximum time to wait for read operations before aborting (default: 10s)
+
 ### Roadmap
 
 - [x] Worker proto

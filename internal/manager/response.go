@@ -168,7 +168,7 @@ func (j Jobs) Encode() ([]byte, error) {
 
 // Decode jobs from bytes.
 func (j *Jobs) Decode(data []byte) error {
-	r := bytes.NewBuffer(data)
+	r := bytes.NewReader(data)
 	n, err := bin.ReadUint32(r)
 	if err != nil {
 		return err
@@ -188,23 +188,11 @@ func (j *Jobs) Decode(data []byte) error {
 	return nil
 }
 
-// JobStatus is the status of a job.
-type JobStatus string
-
-const (
-	// JobWaiting means the job is waiting to be run.
-	JobWaiting JobStatus = "waiting"
-	// JobRunning means the job is running.
-	JobRunning JobStatus = "running"
-	// JobDone means the job is finished, either successfully or errored.
-	JobDone JobStatus = "done"
-)
-
 // Job contains basic data about a job.
 type Job struct {
 	ID     string
 	Name   string
-	Status JobStatus
+	Status string
 }
 
 // Encode job data to bytes.
@@ -218,7 +206,7 @@ func (j *Job) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := bin.WriteString(buf, string(j.Status)); err != nil {
+	if err := bin.WriteString(buf, j.Status); err != nil {
 		return nil, err
 	}
 
@@ -237,11 +225,93 @@ func (j *Job) Decode(r io.Reader) error {
 		return err
 	}
 
-	status, err := bin.ReadString(r)
-	if err != nil {
+	if j.Status, err = bin.ReadString(r); err != nil {
 		return err
 	}
 
-	j.Status = JobStatus(status)
+	return nil
+}
+
+// JobStats contains stats about a job.
+type JobStats struct {
+	ID              string
+	Status          string
+	Name            string
+	Errors          uint32
+	AccumulatorSize uint32
+	Tasks           struct {
+		Total     uint32
+		Failed    uint32
+		Processed uint32
+		Running   uint32
+	}
+}
+
+// Encode the job stats into bytes.
+func (s *JobStats) Encode() ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	strings := []string{
+		s.ID,
+		s.Name,
+		s.Status,
+	}
+	ints := []uint32{
+		s.Errors,
+		s.AccumulatorSize,
+		s.Tasks.Failed,
+		s.Tasks.Processed,
+		s.Tasks.Running,
+		s.Tasks.Total,
+	}
+
+	for _, s := range strings {
+		if err := bin.WriteString(buf, s); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, i := range ints {
+		if err := bin.WriteUint32(buf, i); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// Decode the job stats from bytes.
+func (s *JobStats) Decode(data []byte) error {
+	buf := bytes.NewReader(data)
+
+	strings := []*string{
+		&s.ID,
+		&s.Name,
+		&s.Status,
+	}
+	ints := []*uint32{
+		&s.Errors,
+		&s.AccumulatorSize,
+		&s.Tasks.Failed,
+		&s.Tasks.Processed,
+		&s.Tasks.Running,
+		&s.Tasks.Total,
+	}
+
+	for _, s := range strings {
+		val, err := bin.ReadString(buf)
+		if err != nil {
+			return err
+		}
+		*s = val
+	}
+
+	for _, i := range ints {
+		val, err := bin.ReadUint32(buf)
+		if err != nil {
+			return err
+		}
+		*i = val
+	}
+
 	return nil
 }
